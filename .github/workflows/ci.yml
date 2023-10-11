@@ -21,4 +21,4 @@ jobs:
       with:
         nix_path: nixpkgs=channel:nixos-unstable
     - name: CI
-      run: nix develop --command ./ci.sh
+      run: nix develop --command ./nix-ci.sh

@@ -10,6 +10,7 @@ cargo clippy --all-targets --no-default-features
 cargo clippy --all-targets --all-features
 
 # Non-property tests
+cargo install cargo-careful
 cargo +nightly careful test --no-default-features
 cargo +nightly careful test --no-default-features --examples
 
