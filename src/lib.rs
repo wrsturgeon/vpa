@@ -87,6 +87,7 @@
 )]
 
 /// Unwrap if we're debugging but `unwrap_unchecked` if we're not.
+#[allow(unused_macros)] // <-- FIXME
 #[cfg(any(debug_assertions, test))]
 macro_rules! unwrap {
     ($expr:expr) => {
@@ -95,6 +96,7 @@ macro_rules! unwrap {
 }
 
 /// Unwrap if we're debugging but `unwrap_unchecked` if we're not.
+#[allow(unused_macros)] // <-- FIXME
 #[cfg(not(any(debug_assertions, test)))]
 macro_rules! unwrap {
     ($expr:expr) => {{
@@ -105,6 +107,7 @@ macro_rules! unwrap {
 }
 
 /// Unwrap if we're debugging but `unwrap_unchecked` if we're not.
+#[allow(unused_macros)] // <-- FIXME
 #[cfg(any(debug_assertions, test))]
 macro_rules! get {
     ($expr:expr, $index:expr) => {
@@ -113,6 +116,7 @@ macro_rules! get {
 }
 
 /// Unwrap if we're debugging but `unwrap_unchecked` if we're not.
+#[allow(unused_macros)] // <-- FIXME
 #[cfg(not(any(debug_assertions, test)))]
 macro_rules! get {
     ($expr:expr, $index:expr) => {{
@@ -123,6 +127,7 @@ macro_rules! get {
 }
 
 /// Unwrap if we're debugging but `unwrap_unchecked` if we're not.
+#[allow(unused_macros)] // <-- FIXME
 #[cfg(any(debug_assertions, test))]
 macro_rules! get_mut {
     ($expr:expr, $index:expr) => {
@@ -131,6 +136,7 @@ macro_rules! get_mut {
 }
 
 /// Unwrap if we're debugging but `unwrap_unchecked` if we're not.
+#[allow(unused_macros)] // <-- FIXME
 #[cfg(not(any(debug_assertions, test)))]
 macro_rules! get_mut {
     ($expr:expr, $index:expr) => {{
@@ -140,16 +146,16 @@ macro_rules! get_mut {
     }};
 }
 
-mod alphabet;
 mod automaton;
 mod edge;
 mod execution;
+mod kind;
 mod run;
 mod state;
 
 pub use {
-    alphabet::{Alphabet, Kind},
     automaton::Automaton,
     execution::Execution,
+    kind::{Alphabet, Kind},
     run::Run,
 };

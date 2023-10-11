@@ -22,6 +22,7 @@ pub struct Execution<'vpa, A: Alphabet, Iter: Iterator<Item = A>> {
 impl<A: Alphabet, Iter: Iterator<Item = A>> Iterator for Execution<'_, A, Iter> {
     type Item = A;
     #[inline]
+    #[allow(clippy::todo, unreachable_code, unused_variables)] // <-- FIXME
     fn next(&mut self) -> Option<Self::Item> {
         let token = self.iter.next();
         todo!();

@@ -6,7 +6,10 @@
 
 //! Visibly pushdown automata.
 
-use crate::{state::State, Alphabet, Kind};
+use crate::{state::State, Alphabet};
+
+#[cfg(any(test, debug_assertions))]
+use crate::Kind;
 
 #[cfg(feature = "quickcheck")]
 use {
@@ -45,13 +48,19 @@ impl<A: Alphabet + Arbitrary> Arbitrary for Automaton<A> {
                 continue;
             }
             #[allow(unsafe_code)]
+            // SAFETY: Just checked above to be non-empty.
             let size = unsafe { NonZeroUsize::new_unchecked(states.len()) };
+            #[allow(clippy::arithmetic_side_effects)] // <-- false positive
             let initial = usize::arbitrary(g) % size;
-            Self { states, initial }
+            return Self { states, initial };
         }
     }
     #[inline]
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        todo!()
+        Box::new(
+            (self.states.clone(), self.initial)
+                .shrink()
+                .map(|(states, initial)| Self { states, initial }),
+        )
     }
 }

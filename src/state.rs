@@ -6,8 +6,11 @@
 
 //! A state in a visibly pushdown automaton.
 
-use crate::{edge::Edge, Alphabet, Kind};
+use crate::{edge::Edge, Alphabet};
 use std::collections::BTreeMap;
+
+#[cfg(any(test, debug_assertions))]
+use crate::Kind;
 
 #[cfg(feature = "quickcheck")]
 use quickcheck::{Arbitrary, Gen};
@@ -17,6 +20,8 @@ use quickcheck::{Arbitrary, Gen};
 pub(crate) struct State<A: Alphabet> {
     /// State transitions.
     transitions: BTreeMap<A, Edge>,
+    /// Whether an automaton in this state should accept when input ends.
+    accepting: bool,
 }
 
 impl<A: Alphabet> State<A> {
@@ -26,7 +31,7 @@ impl<A: Alphabet> State<A> {
     pub(crate) fn check_consistency(&self) -> Result<(), (usize, Kind, Kind)> {
         for (i, (token, edge)) in self.transitions.iter().enumerate() {
             let tk = token.kind();
-            let ek = edge.kind();
+            let ek = edge.kind;
             if tk != ek {
                 return Err((i, tk, ek));
             }
@@ -36,15 +41,21 @@ impl<A: Alphabet> State<A> {
 }
 
 #[cfg(feature = "quickcheck")]
-impl<A: Alphabet + Arbitrary> Arbitrary for Automaton<A> {
+impl<A: Alphabet + Arbitrary> Arbitrary for State<A> {
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
         Self {
             transitions: Arbitrary::arbitrary(g),
+            accepting: Arbitrary::arbitrary(g),
         }
     }
     #[inline]
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        todo!()
+        Box::new((self.transitions.clone(), self.accepting).shrink().map(
+            |(transitions, accepting)| Self {
+                transitions,
+                accepting,
+            },
+        ))
     }
 }

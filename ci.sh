@@ -19,6 +19,10 @@ cargo clippy --all-targets --all-features
 cargo +nightly careful test --no-default-features
 cargo +nightly careful test --no-default-features --examples
 
+# Nix build status
+git add -A
+nix build
+
 # Property tests
 cargo test -r --all-features
 cargo test -r --all-features --examples
@@ -35,11 +39,11 @@ cargo +nightly miri test -r --no-default-features --examples
 ./run-examples.sh
 
 # Check for remaining `FIXME`s
-grep -Rnw . -e FIXME # next line checks result
+grep -Rnw . --exclude-dir=target -e FIXME # next line checks result
 if [ $? -eq 0 ]
 then
   exit 1
 fi
 
 # Print remaining `TODO`s
-grep -Rnw . -e TODO
+grep -Rnw . --exclude-dir=target -e TODO

@@ -8,6 +8,12 @@
 
 use core::fmt;
 
+#[cfg(feature = "quickcheck")]
+use {
+    core::iter::{empty, once},
+    quickcheck::{Arbitrary, Gen},
+};
+
 /// What kind of symbol something is: call, return, or local.
 #[allow(clippy::exhaustive_enums)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -40,4 +46,23 @@ pub trait Alphabet: Ord {
     /// What kind of symbol this is: call, return, or local.
     #[must_use]
     fn kind(&self) -> Kind;
+}
+
+#[cfg(feature = "quickcheck")]
+impl Arbitrary for Kind {
+    #[inline]
+    fn arbitrary(g: &mut Gen) -> Self {
+        *get!(
+            [Self::Call, Self::Return, Self::Local],
+            usize::arbitrary(g) % 3
+        )
+    }
+    #[inline]
+    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+        match *self {
+            Self::Local => Box::new(empty()),
+            Self::Return => Box::new(once(Self::Local)),
+            Self::Call => Box::new([Self::Local, Self::Return].into_iter()),
+        }
+    }
 }
