@@ -39,11 +39,7 @@ cargo +nightly miri test -r --no-default-features --examples
 ./run-examples.sh
 
 # Check for remaining `FIXME`s
-grep -Rnw . --exclude-dir=target -e FIXME # next line checks result
-if [ $? -eq 0 ]
-then
-  exit 1
-fi
+grep -Rnw . --exclude-dir=target --exclude=ci.sh -e FIXME && exit 1 || : # next line checks result
 
 # Print remaining `TODO`s
-grep -Rnw . --exclude-dir=target -e TODO
+grep -Rnw . --exclude-dir=target -e TODO || :
