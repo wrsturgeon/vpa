@@ -8,15 +8,16 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
+  RUST_BACKTRACE: full
   QUICKCHECK_TESTS: 10000
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
     - name: CI
-      run: ./ci.sh
+    - uses: cachix/install-nix-action@v22
+      with:
+        nix_path: nixpkgs=channel:nixos-unstable
+    - run: ./ci.sh
