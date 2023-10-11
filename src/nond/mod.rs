@@ -4,10 +4,10 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-//! Visibly pushdown automata.
+//! Nondeterministic visibly pushdown automata.
 
-use crate::Alphabet;
+mod automaton;
+mod edge;
+mod state;
 
-pub struct Automaton<A: Alphabet> {
-    states: Vec<State>,
-}
+pub use automaton::Automaton;

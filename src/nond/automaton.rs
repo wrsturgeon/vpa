@@ -6,7 +6,8 @@
 
 //! Visibly pushdown automata.
 
-use crate::{exec::Execute, state::State, Alphabet};
+use crate::{exec::Execute, nond::state::State, Alphabet};
+use std::collections::BTreeSet;
 
 #[cfg(any(test, debug_assertions))]
 use crate::Kind;
@@ -23,24 +24,30 @@ pub struct Automaton<A: Alphabet> {
     /// Every state in the automaton.
     pub(crate) states: Vec<State<A>>,
     /// Index of the state of the machine before parsing any input.
-    pub(crate) initial: usize,
+    pub(crate) initial: BTreeSet<usize>,
 }
 
 impl<A: Alphabet> Execute<A> for Automaton<A> {
-    type Ctrl = usize;
+    type Ctrl = BTreeSet<usize>;
     #[inline]
     fn initial(&self) -> Self::Ctrl {
-        self.initial
+        self.initial.clone()
     }
     #[inline]
     fn step(&self, ctrl: Self::Ctrl, maybe_token: Option<&A>) -> Result<Self::Ctrl, bool> {
-        let state = get!(self.states, ctrl);
-        maybe_token.map_or(Err(state.accepting), |token| {
-            state
-                .transitions
-                .get(token)
-                .map_or(Err(false), |edge| Ok(edge.dst))
-        })
+        let mut states = ctrl.into_iter().map(|i| get!(self.states, i));
+        match maybe_token {
+            None => Err(states.any(|s| s.accepting)),
+            Some(token) => Ok({
+                let mut set = BTreeSet::new();
+                for s in states {
+                    if let Some(edge) = s.transitions.get(token) {
+                        set.extend(edge.dst.iter().copied());
+                    }
+                }
+                set
+            }),
+        }
     }
     #[inline]
     #[cfg(any(test, debug_assertions))]
@@ -66,7 +73,7 @@ impl<A: Alphabet> Automaton<A> {
                 .into_iter()
                 .map(|s| s.deabsurdify(size))
                 .collect(),
-            initial: self.initial % size,
+            initial: self.initial.into_iter().map(|i: usize| i % size).collect(),
         }
     }
 }
@@ -84,7 +91,10 @@ impl<A: Alphabet + Arbitrary> Arbitrary for Automaton<A> {
             // SAFETY: Just checked above to be non-empty.
             let size = unsafe { NonZeroUsize::new_unchecked(states.len()) };
             #[allow(clippy::arithmetic_side_effects)] // <-- false positive
-            let initial = usize::arbitrary(g) % size;
+            let initial = BTreeSet::arbitrary(g)
+                .into_iter()
+                .map(|i: usize| i % size)
+                .collect();
             return Self { states, initial };
         }
     }
@@ -93,7 +103,7 @@ impl<A: Alphabet + Arbitrary> Arbitrary for Automaton<A> {
     #[allow(clippy::arithmetic_side_effects)]
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
         Box::new(
-            (self.states.clone(), self.initial)
+            (self.states.clone(), self.initial.clone())
                 .shrink()
                 .filter(|&(ref states, _)| !states.is_empty())
                 .map(|(states, initial)| Self { states, initial }.deabsurdify()),

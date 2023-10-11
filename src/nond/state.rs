@@ -6,7 +6,7 @@
 
 //! A state in a visibly pushdown automaton.
 
-use crate::{edge::Edge, Alphabet};
+use crate::{nond::edge::Edge, Alphabet};
 use std::collections::BTreeMap;
 
 #[cfg(any(test, debug_assertions))]

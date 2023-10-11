@@ -6,28 +6,28 @@
 
 //! Trait to run a visibly pushdown automaton on an input sequence.
 
-use crate::{Alphabet, Automaton, Execution};
+use crate::{exec::Execute, Alphabet, Execution};
 
 /// Trait to run a visibly pushdown automaton on an input sequence.
 pub trait Run<A: Alphabet>: Iterator<Item = A> + Sized {
     /// Run a visibly pushdown automaton on this input sequence.
     #[must_use]
-    fn run(self, vpa: &Automaton<A>) -> Execution<'_, A, Self>;
+    fn run<E: Execute<A>>(self, graph: &E) -> Execution<'_, A, E, Self>;
 }
 
 impl<A: Alphabet, Iter: Iterator<Item = A>> Run<A> for Iter {
     #[inline]
     #[must_use]
-    fn run(self, vpa: &Automaton<A>) -> Execution<'_, A, Self> {
+    fn run<E: Execute<A>>(self, graph: &E) -> Execution<'_, A, E, Self> {
         #[allow(clippy::panic)]
         #[cfg(any(test, debug_assertions))]
-        if let Err((i, a, b)) = vpa.check_consistency() {
+        if let Err((i, a, b)) = graph.check_consistency() {
             panic!("Internal error: state #{i} triggers a {b} transition on a {a} token");
         }
         Execution {
-            vpa,
+            graph,
             iter: self,
-            state: vpa.initial,
+            ctrl: Ok(graph.initial()),
         }
     }
 }

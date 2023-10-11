@@ -6,6 +6,8 @@
 
 //! Edge in a visibly pushdown automaton (everything except the source state and the token that triggers it).
 
+use std::collections::BTreeSet;
+
 #[cfg(any(test, debug_assertions))]
 use crate::Kind;
 
@@ -19,7 +21,7 @@ use {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct Edge {
     /// Index of the machine's state after this transition.
-    pub(crate) dst: usize,
+    pub(crate) dst: BTreeSet<usize>,
     /// Function to call when compiled to a source file.
     /// - `Call   => state -> token ->                 state * stack`
     /// - `Return => state -> token -> stack option -> state`
@@ -37,7 +39,7 @@ impl Edge {
     #[allow(clippy::arithmetic_side_effects)]
     pub(crate) fn deabsurdify(self, size: NonZeroUsize) -> Self {
         Self {
-            dst: self.dst % size,
+            dst: self.dst.into_iter().map(|i| i % size).collect(),
             ..self
         }
     }
@@ -58,7 +60,7 @@ impl Arbitrary for Edge {
     #[cfg(any(test, debug_assertions))]
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
         Box::new(
-            (self.dst, self.call.clone(), self.kind)
+            (self.dst.clone(), self.call.clone(), self.kind)
                 .shrink()
                 .map(|(dst, call, kind)| Self { dst, call, kind }),
         )
@@ -67,7 +69,7 @@ impl Arbitrary for Edge {
     #[cfg(not(any(test, debug_assertions)))]
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
         Box::new(
-            (self.dst, self.call.clone())
+            (self.dst.clone(), self.call.clone())
                 .shrink()
                 .map(|(dst, call)| Self { dst, call }),
         )
