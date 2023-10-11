@@ -6,7 +6,8 @@
 
 //! Visibly pushdown automata.
 
-use crate::{exec::Execute, state::State, Alphabet};
+use crate::{exec::Execute, indices::Indices, state::State, Alphabet};
+use std::collections::BTreeSet;
 
 #[cfg(any(test, debug_assertions))]
 use crate::Kind;
@@ -17,30 +18,37 @@ use {
     quickcheck::{Arbitrary, Gen},
 };
 
+/// Deterministic visibly pushdown automaton: each token causes exactly one transition.
+pub type Deterministic<A> = Automaton<A, usize>;
+/// Deterministic visibly pushdown automaton: each token can cause many transitions, and if any accept, the automaton accepts.
+pub type Nondeterministic<A> = Automaton<A, BTreeSet<usize>>;
+
 /// Visibly pushdown automaton containing all states.
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Automaton<A: Alphabet> {
+pub struct Automaton<A: Alphabet, Ctrl: Indices> {
     /// Every state in the automaton.
-    pub(crate) states: Vec<State<A>>,
+    pub(crate) states: Vec<State<A, Ctrl>>,
     /// Index of the state of the machine before parsing any input.
-    pub(crate) initial: usize,
+    pub(crate) initial: Ctrl,
 }
 
-impl<A: Alphabet> Execute<A> for Automaton<A> {
-    type Ctrl = usize;
+impl<A: Alphabet, Ctrl: Indices> Execute<A> for Automaton<A, Ctrl> {
+    type Ctrl = Ctrl;
     #[inline]
     fn initial(&self) -> Self::Ctrl {
-        self.initial
+        self.initial.clone()
     }
     #[inline]
     fn step(&self, ctrl: Self::Ctrl, maybe_token: Option<&A>) -> Result<Self::Ctrl, bool> {
-        let state = get!(self.states, ctrl);
-        maybe_token.map_or(Err(state.accepting), |token| {
-            state
-                .transitions
-                .get(token)
-                .map_or(Err(false), |edge| Ok(edge.dst))
-        })
+        let mut states = ctrl.iter().map(|&i| get!(self.states, i));
+        match maybe_token {
+            None => Err(states.any(|s| s.accepting)),
+            Some(token) => Ctrl::collect(
+                states
+                    .filter_map(|s| s.transitions.get(token))
+                    .flat_map(|edge| edge.dst.iter().copied()),
+            ),
+        }
     }
     #[inline]
     #[cfg(any(test, debug_assertions))]
@@ -52,7 +60,7 @@ impl<A: Alphabet> Execute<A> for Automaton<A> {
     }
 }
 
-impl<A: Alphabet> Automaton<A> {
+impl<A: Alphabet, Ctrl: Indices> Automaton<A, Ctrl> {
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
     #[cfg(feature = "quickcheck")]
@@ -66,13 +74,15 @@ impl<A: Alphabet> Automaton<A> {
                 .into_iter()
                 .map(|s| s.deabsurdify(size))
                 .collect(),
-            initial: self.initial % size,
+            initial: self.initial.map(|i| i % size),
         }
     }
 }
 
 #[cfg(feature = "quickcheck")]
-impl<A: Alphabet + Arbitrary> Arbitrary for Automaton<A> {
+impl<A: Alphabet + Arbitrary, Ctrl: 'static + Arbitrary + Indices> Arbitrary
+    for Automaton<A, Ctrl>
+{
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
         loop {
@@ -84,7 +94,7 @@ impl<A: Alphabet + Arbitrary> Arbitrary for Automaton<A> {
             // SAFETY: Just checked above to be non-empty.
             let size = unsafe { NonZeroUsize::new_unchecked(states.len()) };
             #[allow(clippy::arithmetic_side_effects)] // <-- false positive
-            let initial = usize::arbitrary(g) % size;
+            let initial = Ctrl::arbitrary(g).map(|i| i % size);
             return Self { states, initial };
         }
     }
@@ -93,7 +103,7 @@ impl<A: Alphabet + Arbitrary> Arbitrary for Automaton<A> {
     #[allow(clippy::arithmetic_side_effects)]
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
         Box::new(
-            (self.states.clone(), self.initial)
+            (self.states.clone(), self.initial.clone())
                 .shrink()
                 .filter(|&(ref states, _)| !states.is_empty())
                 .map(|(states, initial)| Self { states, initial }.deabsurdify()),

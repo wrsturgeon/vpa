@@ -6,7 +6,7 @@
 
 //! A state in a visibly pushdown automaton.
 
-use crate::{edge::Edge, Alphabet};
+use crate::{edge::Edge, indices::Indices, Alphabet};
 use std::collections::BTreeMap;
 
 #[cfg(any(test, debug_assertions))]
@@ -20,14 +20,14 @@ use {
 
 /// A state in a visibly pushdown automaton.
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub(crate) struct State<A: Alphabet> {
+pub(crate) struct State<A: Alphabet, Ctrl: Indices> {
     /// State transitions.
-    pub(crate) transitions: BTreeMap<A, Edge>,
+    pub(crate) transitions: BTreeMap<A, Edge<Ctrl>>,
     /// Whether an automaton in this state should accept when input ends.
     pub(crate) accepting: bool,
 }
 
-impl<A: Alphabet> State<A> {
+impl<A: Alphabet, Ctrl: Indices> State<A, Ctrl> {
     /// Ensure that each local token causes a local transition and so on.
     #[inline]
     #[cfg(any(test, debug_assertions))]
@@ -58,7 +58,7 @@ impl<A: Alphabet> State<A> {
 }
 
 #[cfg(feature = "quickcheck")]
-impl<A: Alphabet + Arbitrary> Arbitrary for State<A> {
+impl<A: Alphabet + Arbitrary, Ctrl: 'static + Arbitrary + Indices> Arbitrary for State<A, Ctrl> {
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
         Self {

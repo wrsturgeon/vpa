@@ -149,13 +149,13 @@ macro_rules! get_mut {
 mod automaton;
 mod edge;
 mod exec;
+mod indices;
 mod kind;
-pub mod nond;
 mod run;
 mod state;
 
 pub use {
-    automaton::Automaton,
+    automaton::{Automaton, Deterministic, Nondeterministic},
     exec::{Execute, Execution},
     kind::{Alphabet, Kind},
     run::Run,

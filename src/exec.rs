@@ -6,7 +6,7 @@
 
 //! Execution of a visibly pushdown automaton on an input sequence.
 
-use crate::Alphabet;
+use crate::{indices::Indices, Alphabet};
 use core::mem::replace;
 
 #[cfg(any(test, debug_assertions))]
@@ -15,7 +15,7 @@ use crate::Kind;
 /// Any executable automaton.
 pub trait Execute<A: Alphabet> {
     /// Record of control flow (usually a state or a set of states).
-    type Ctrl;
+    type Ctrl: Indices;
     /// Initial control flow.
     #[must_use]
     fn initial(&self) -> Self::Ctrl;
