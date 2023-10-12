@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+quickcheck = { version = "1.0.3", optional = true }
 rand = "0.8.5"
 vpa = { path = "../.." }
 
-[dev-dependencies]
-quickcheck = "1.0.3"
+[features]
+quickcheck = ["dep:quickcheck"]

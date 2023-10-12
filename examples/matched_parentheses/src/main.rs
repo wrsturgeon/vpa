@@ -1,4 +1,4 @@
-#[cfg(test)]
+#[cfg(all(test, feature = "quickcheck"))]
 mod test;
 
 use core::iter::once;

@@ -11,7 +11,7 @@
 //! I don't want to impose a `Clone` bound on a type that never actually needs to be cloned
 //! just because an interpreter would be easier to write if it were `Clone`.
 
-use crate::Lookup;
+use crate::{Lookup, Merge};
 use core::{iter::*, option};
 use std::collections::{
     btree_map::{IntoIter, Iter},
@@ -66,11 +66,26 @@ impl<Arg: 'static + Ord, Etc: 'static + Lookup> Lookup for CurryOpt<Arg, Etc> {
     }
     #[inline]
     fn map_values<F: FnMut(&mut Self::Value)>(&mut self, mut f: F) {
-        let _ = self.wildcard.as_mut().map(|some| some.map_values(&mut f));
-        let _ = self.none.as_mut().map(|some| some.map_values(&mut f));
+        if let Some(ref mut wild) = self.wildcard {
+            wild.map_values(&mut f);
+        }
+        if let Some(ref mut none) = self.none {
+            none.map_values(&mut f);
+        }
         for v in self.some.values_mut() {
             v.map_values(&mut f);
         }
+    }
+}
+
+impl<Arg: Clone + Ord, Etc: Clone + Lookup + Merge> Merge for CurryOpt<Arg, Etc> {
+    #[inline]
+    fn merge(self, other: &Self) -> Result<Self, crate::IllFormed> {
+        Ok(Self {
+            wildcard: self.wildcard.merge(&other.wildcard)?,
+            none: self.none.merge(&other.none)?,
+            some: self.some.merge(&other.some)?,
+        })
     }
 }
 

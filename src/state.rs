@@ -6,7 +6,7 @@
 
 //! A state in a visibly pushdown automaton.
 
-use crate::{Curry, CurryOpt, Edge, Indices, Return};
+use crate::{Curry, CurryOpt, Edge, Indices, Merge, Return};
 
 #[cfg(feature = "quickcheck")]
 use {
@@ -23,6 +23,16 @@ pub struct State<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indi
     pub transitions: CurryOpt<S, Curry<A, Return<Edge<S, Ctrl>>>>,
     /// Whether an automaton in this state should accept when input ends.
     pub accepting: bool,
+}
+
+impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices> Merge for State<A, S, Ctrl> {
+    #[inline]
+    fn merge(self, other: &Self) -> Result<Self, crate::IllFormed> {
+        Ok(Self {
+            transitions: self.transitions.merge(&other.transitions)?,
+            accepting: self.accepting || other.accepting,
+        })
+    }
 }
 
 impl<A: Ord, S: Copy + Ord, Ctrl: Indices> State<A, S, Ctrl> {

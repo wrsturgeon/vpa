@@ -6,7 +6,7 @@
 
 //! Map from a potential wildcard to _another map_.
 
-use crate::Lookup;
+use crate::{Lookup, Merge};
 use core::{iter::*, option};
 use std::collections::{
     btree_map::{IntoIter, Iter},
@@ -52,10 +52,22 @@ impl<Arg: 'static + Ord, Etc: 'static + Lookup> Lookup for Curry<Arg, Etc> {
     }
     #[inline]
     fn map_values<F: FnMut(&mut Self::Value)>(&mut self, mut f: F) {
-        let _ = self.wildcard.as_mut().map(|some| some.map_values(&mut f));
+        if let Some(ref mut wild) = self.wildcard {
+            wild.map_values(&mut f);
+        }
         for v in self.specific.values_mut() {
             v.map_values(&mut f);
         }
+    }
+}
+
+impl<Arg: Clone + Ord, Etc: Clone + Lookup + Merge> Merge for Curry<Arg, Etc> {
+    #[inline]
+    fn merge(self, other: &Self) -> Result<Self, crate::IllFormed> {
+        Ok(Self {
+            wildcard: self.wildcard.merge(&other.wildcard)?,
+            specific: self.specific.merge(&other.specific)?,
+        })
     }
 }
 

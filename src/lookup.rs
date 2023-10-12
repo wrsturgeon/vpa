@@ -11,6 +11,8 @@ use std::collections::BTreeMap;
 #[cfg(feature = "quickcheck")]
 use quickcheck::{Arbitrary, Gen};
 
+use crate::Merge;
+
 /// Trait to define fallible lookup.
 pub trait Lookup {
     /// Input to a lookup.
@@ -54,6 +56,13 @@ impl<T: 'static> Lookup for Return<T> {
     #[inline(always)]
     fn map_values<F: FnMut(&mut Self::Value)>(&mut self, mut f: F) {
         f(&mut self.0);
+    }
+}
+
+impl<T: Merge> Merge for Return<T> {
+    #[inline(always)]
+    fn merge(self, other: &Self) -> Result<Self, crate::IllFormed> {
+        Ok(Self(self.0.merge(&other.0)?))
     }
 }
 

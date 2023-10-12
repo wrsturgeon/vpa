@@ -162,6 +162,7 @@ mod lookup;
 mod merge;
 mod run;
 mod state;
+mod subc;
 
 pub use {
     automaton::{Automaton, Deterministic, Nondeterministic},
@@ -172,7 +173,7 @@ pub use {
     exec::{Execute, Execution, IllFormed},
     indices::Indices,
     lookup::{Lookup, Return},
-    merge::Merge,
+    merge::{merge, Merge},
     run::Run,
     state::State,
 };
