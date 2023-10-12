@@ -36,10 +36,17 @@ cargo +nightly miri test -r --no-default-features
 cargo +nightly miri test -r --no-default-features --examples
 
 # Run examples
-./run-examples.sh
+set +e
+export EXAMPLES=$(cargo run --example 2>&1 | grep '^ ')
+set -e
+echo $EXAMPLES | xargs -n 1 cargo +nightly miri run --example
+if [ -f run-examples.sh ]
+then
+  ./run-examples.sh
+fi
 
 # Check for remaining `FIXME`s
-grep -Rnw . --exclude-dir=target --exclude=ci.sh -e FIXME && exit 1 || : # next line checks result
+grep -Rnw . --exclude-dir=target --exclude-dir=.git --exclude=ci.sh -e FIXME && exit 1 || : # next line checks result
 
 # Print remaining `TODO`s
 grep -Rnw . --exclude-dir=target -e TODO || :

@@ -25,6 +25,8 @@ pub trait Indices: Clone {
     #[must_use]
     fn flat_map<F: FnMut(usize) -> Self>(self, f: F) -> Self;
     /// Collect an iterator into this type.
+    /// # Errors
+    /// If the iterator is empty.
     fn collect<I: IntoIterator<Item = usize>>(iter: I) -> Result<Self, bool>;
 }
 

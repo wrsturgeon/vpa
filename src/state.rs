@@ -6,7 +6,7 @@
 
 //! A state in a visibly pushdown automaton.
 
-use crate::{edge::Edge, indices::Indices, Alphabet};
+use crate::{Edge, Indices};
 use std::collections::BTreeMap;
 
 #[cfg(any(test, debug_assertions))]
@@ -19,24 +19,33 @@ use {
 };
 
 /// A state in a visibly pushdown automaton.
+#[allow(clippy::exhaustive_structs)]
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub(crate) struct State<A: Alphabet, Ctrl: Indices> {
+pub struct State<A: Ord, Ctrl: Indices> {
     /// State transitions.
-    pub(crate) transitions: BTreeMap<A, Edge<Ctrl>>,
+    pub transitions: BTreeMap<A, Edge<Ctrl>>,
     /// Whether an automaton in this state should accept when input ends.
-    pub(crate) accepting: bool,
+    pub accepting: bool,
 }
 
-impl<A: Alphabet, Ctrl: Indices> State<A, Ctrl> {
+impl<A: Ord, Ctrl: Indices> State<A, Ctrl> {
     /// Ensure that each local token causes a local transition and so on.
     #[inline]
     #[cfg(any(test, debug_assertions))]
     pub(crate) fn check_consistency(&self) -> Result<(), (usize, Kind, Kind)> {
+        use std::collections::btree_map::Entry;
+
+        let mut map = BTreeMap::new();
         for (i, (token, edge)) in self.transitions.iter().enumerate() {
-            let tk = token.kind();
-            let ek = edge.kind;
-            if tk != ek {
-                return Err((i, tk, ek));
+            let edge_kind = edge.kind();
+            match map.entry(token) {
+                Entry::Vacant(vacant) => drop(vacant.insert(edge_kind)),
+                Entry::Occupied(occupied) => {
+                    let kind = *occupied.get();
+                    if kind != edge_kind {
+                        return Err((i, kind, edge_kind));
+                    }
+                }
             }
         }
         Ok(())
@@ -58,7 +67,7 @@ impl<A: Alphabet, Ctrl: Indices> State<A, Ctrl> {
 }
 
 #[cfg(feature = "quickcheck")]
-impl<A: Alphabet + Arbitrary, Ctrl: 'static + Arbitrary + Indices> Arbitrary for State<A, Ctrl> {
+impl<A: Arbitrary + Ord, Ctrl: 'static + Arbitrary + Indices> Arbitrary for State<A, Ctrl> {
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
         Self {

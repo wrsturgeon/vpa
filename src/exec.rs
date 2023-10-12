@@ -6,14 +6,14 @@
 
 //! Execution of a visibly pushdown automaton on an input sequence.
 
-use crate::{indices::Indices, Alphabet};
+use crate::Indices;
 use core::mem::replace;
 
 #[cfg(any(test, debug_assertions))]
 use crate::Kind;
 
 /// Any executable automaton.
-pub trait Execute<A: Alphabet> {
+pub trait Execute<A> {
     /// Record of control flow (usually a state or a set of states).
     type Ctrl: Indices;
     /// Initial control flow.
@@ -31,17 +31,18 @@ pub trait Execute<A: Alphabet> {
 }
 
 /// Execution of a visibly pushdown automaton on an input sequence.
+#[allow(clippy::exhaustive_structs)]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Execution<'a, A: Alphabet, E: Execute<A>, Iter: Iterator<Item = A>> {
+pub struct Execution<'a, A, E: Execute<A>, Iter: Iterator<Item = A>> {
     /// Reference to the automaton we're running.
-    pub(crate) graph: &'a E,
+    pub graph: &'a E,
     /// Input sequence as an iterator.
-    pub(crate) iter: Iter,
+    pub iter: Iter,
     /// Current state in the automaton.
-    pub(crate) ctrl: Result<E::Ctrl, bool>,
+    pub ctrl: Result<E::Ctrl, bool>,
 }
 
-impl<A: Alphabet, E: Execute<A>, Iter: Iterator<Item = A>> Iterator for Execution<'_, A, E, Iter> {
+impl<A, E: Execute<A>, Iter: Iterator<Item = A>> Iterator for Execution<'_, A, E, Iter> {
     type Item = A;
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {

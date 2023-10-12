@@ -4,10 +4,11 @@ set -eux
 
 for dir in $(ls -A examples)
 do
-  cd examples/$dir
-  cargo build
-  cargo fmt
-  ../../ci.sh
-  cargo +nightly miri run
-  cd ../..
+  if [ -d examples/$dir ]
+  then
+    cd examples/$dir
+    cargo +nightly miri run
+    ../../ci.sh
+    cd ../..
+  fi
 done

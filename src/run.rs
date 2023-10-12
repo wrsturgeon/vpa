@@ -6,16 +6,16 @@
 
 //! Trait to run a visibly pushdown automaton on an input sequence.
 
-use crate::{exec::Execute, Alphabet, Execution};
+use crate::{Execute, Execution};
 
 /// Trait to run a visibly pushdown automaton on an input sequence.
-pub trait Run<A: Alphabet>: Iterator<Item = A> + Sized {
+pub trait Run<A>: Iterator<Item = A> + Sized {
     /// Run a visibly pushdown automaton on this input sequence.
     #[must_use]
     fn run<E: Execute<A>>(self, graph: &E) -> Execution<'_, A, E, Self>;
 }
 
-impl<A: Alphabet, Iter: Iterator<Item = A>> Run<A> for Iter {
+impl<A, Iter: Iterator<Item = A>> Run<A> for Iter {
     #[inline]
     #[must_use]
     fn run<E: Execute<A>>(self, graph: &E) -> Execution<'_, A, E, Self> {

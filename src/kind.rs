@@ -41,13 +41,6 @@ impl fmt::Display for Kind {
     }
 }
 
-/// Alphabet partitioned into three disjoint sets: calls, returns, and locals.
-pub trait Alphabet: Ord {
-    /// What kind of symbol this is: call, return, or local.
-    #[must_use]
-    fn kind(&self) -> Kind;
-}
-
 #[cfg(feature = "quickcheck")]
 impl Arbitrary for Kind {
     #[inline]

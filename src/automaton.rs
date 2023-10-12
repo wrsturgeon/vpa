@@ -6,7 +6,7 @@
 
 //! Visibly pushdown automata.
 
-use crate::{exec::Execute, indices::Indices, state::State, Alphabet};
+use crate::{Execute, Indices, State};
 use std::collections::BTreeSet;
 
 #[cfg(any(test, debug_assertions))]
@@ -24,15 +24,16 @@ pub type Deterministic<A> = Automaton<A, usize>;
 pub type Nondeterministic<A> = Automaton<A, BTreeSet<usize>>;
 
 /// Visibly pushdown automaton containing all states.
+#[allow(clippy::exhaustive_structs)]
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Automaton<A: Alphabet, Ctrl: Indices> {
+pub struct Automaton<A: Ord, Ctrl: Indices> {
     /// Every state in the automaton.
-    pub(crate) states: Vec<State<A, Ctrl>>,
+    pub states: Vec<State<A, Ctrl>>,
     /// Index of the state of the machine before parsing any input.
-    pub(crate) initial: Ctrl,
+    pub initial: Ctrl,
 }
 
-impl<A: Alphabet, Ctrl: Indices> Execute<A> for Automaton<A, Ctrl> {
+impl<A: Ord, Ctrl: Indices> Execute<A> for Automaton<A, Ctrl> {
     type Ctrl = Ctrl;
     #[inline]
     fn initial(&self) -> Self::Ctrl {
@@ -46,7 +47,7 @@ impl<A: Alphabet, Ctrl: Indices> Execute<A> for Automaton<A, Ctrl> {
             Some(token) => Ctrl::collect(
                 states
                     .filter_map(|s| s.transitions.get(token))
-                    .flat_map(|edge| edge.dst.iter().copied()),
+                    .flat_map(|edge| edge.dst().iter().copied()),
             ),
         }
     }
@@ -60,7 +61,7 @@ impl<A: Alphabet, Ctrl: Indices> Execute<A> for Automaton<A, Ctrl> {
     }
 }
 
-impl<A: Alphabet, Ctrl: Indices> Automaton<A, Ctrl> {
+impl<A: Ord, Ctrl: Indices> Automaton<A, Ctrl> {
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
     #[cfg(feature = "quickcheck")]
@@ -80,9 +81,7 @@ impl<A: Alphabet, Ctrl: Indices> Automaton<A, Ctrl> {
 }
 
 #[cfg(feature = "quickcheck")]
-impl<A: Alphabet + Arbitrary, Ctrl: 'static + Arbitrary + Indices> Arbitrary
-    for Automaton<A, Ctrl>
-{
+impl<A: Arbitrary + Ord, Ctrl: 'static + Arbitrary + Indices> Arbitrary for Automaton<A, Ctrl> {
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
         loop {

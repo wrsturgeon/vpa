@@ -87,6 +87,26 @@
 )]
 
 /// Unwrap if we're debugging but `unwrap_unchecked` if we're not.
+#[cfg(feature = "quickcheck")]
+#[cfg(any(debug_assertions, test))]
+macro_rules! unwrap {
+    ($expr:expr) => {
+        $expr.unwrap()
+    };
+}
+
+/// Unwrap if we're debugging but `unwrap_unchecked` if we're not.
+#[cfg(feature = "quickcheck")]
+#[cfg(not(any(debug_assertions, test)))]
+macro_rules! unwrap {
+    ($expr:expr) => {{
+        #[allow(unsafe_code)]
+        let result = unsafe { $expr.unwrap_unchecked() };
+        result
+    }};
+}
+
+/// Unwrap if we're debugging but `unwrap_unchecked` if we're not.
 #[cfg(any(debug_assertions, test))]
 macro_rules! get {
     ($expr:expr, $index:expr) => {
@@ -122,27 +142,19 @@ macro_rules! get_mut {
         result
     }};
 }
+*/
 
-/// Unwrap if we're debugging but `unwrap_unchecked` if we're not.
-#[cfg(any(debug_assertions, test))]
-macro_rules! unwrap {
-    ($expr:expr) => {
-        $expr.unwrap()
+/// Call a function that will also be available to the compiled parser.
+#[macro_export]
+macro_rules! call {
+    ($ex:expr) => {
+        $crate::Call::new($ex, stringify!($ex).to_owned())
     };
 }
 
-/// Unwrap if we're debugging but `unwrap_unchecked` if we're not.
-#[cfg(not(any(debug_assertions, test)))]
-macro_rules! unwrap {
-    ($expr:expr) => {{
-        #[allow(unsafe_code)]
-        let result = unsafe { $expr.unwrap_unchecked() };
-        result
-    }};
-}
-*/
-
 mod automaton;
+mod call;
+pub mod combinators;
 mod edge;
 mod exec;
 mod indices;
@@ -152,7 +164,11 @@ mod state;
 
 pub use {
     automaton::{Automaton, Deterministic, Nondeterministic},
+    call::Call,
+    edge::Edge,
     exec::{Execute, Execution},
-    kind::{Alphabet, Kind},
+    indices::Indices,
+    kind::Kind,
     run::Run,
+    state::State,
 };
