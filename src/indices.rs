@@ -19,8 +19,7 @@ pub trait Indices: Clone {
     #[must_use]
     fn iter(&self) -> Self::View<'_>;
     /// Apply a function to each index.
-    #[must_use]
-    fn map<F: FnMut(usize) -> usize>(self, f: F) -> Self;
+    fn map<F: FnMut(&mut usize)>(&mut self, f: F);
     /// Apply a function to each index, then synthesize the rest into this type again.
     #[must_use]
     fn flat_map<F: FnMut(usize) -> Self>(self, f: F) -> Self;
@@ -37,8 +36,8 @@ impl Indices for usize {
         once(self)
     }
     #[inline(always)]
-    fn map<F: FnMut(usize) -> usize>(self, mut f: F) -> Self {
-        f(self)
+    fn map<F: FnMut(&mut usize)>(&mut self, mut f: F) {
+        f(self);
     }
     #[inline(always)]
     fn flat_map<F: FnMut(usize) -> Self>(self, mut f: F) -> Self {
@@ -68,8 +67,15 @@ impl Indices for BTreeSet<usize> {
         self.iter()
     }
     #[inline(always)]
-    fn map<F: FnMut(usize) -> usize>(self, f: F) -> Self {
-        self.into_iter().map(f).collect()
+    fn map<F: FnMut(&mut usize)>(&mut self, mut f: F) {
+        *self = self
+            .iter()
+            .map(|&immut| {
+                let mut i = immut;
+                f(&mut i);
+                i
+            })
+            .collect();
     }
     #[inline(always)]
     fn flat_map<F: FnMut(usize) -> Self>(self, f: F) -> Self {

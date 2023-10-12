@@ -1,28 +1,46 @@
+use core::iter::once;
 use rand::{thread_rng, RngCore};
-use vpa::{call, Automaton, Deterministic, Edge, Run, State};
+use vpa::{call, Automaton, Curry, CurryOpt, Deterministic, Edge, Return, Run, State};
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum Symbol {
+    Paren, // Just one value, but e.g. if we had parens and brackets, we would use two.
+}
 
 /// Very manually constructed parser recognizing only valid parentheses.
-fn parser() -> Deterministic<char> {
+fn parser() -> Deterministic<char, Symbol> {
     Automaton {
         states: vec![State {
-            transitions: [
-                (
-                    '(',
-                    Edge::Call {
-                        dst: 0,
-                        call: call!(|x| x),
+            transitions: CurryOpt {
+                wildcard: Some(Curry {
+                    wildcard: None,
+                    specific: once((
+                        '(',
+                        Return(Edge::Call {
+                            call: call!(|x| x),
+                            dst: 0,
+                            push: Symbol::Paren,
+                        }),
+                    ))
+                    .collect(),
+                }),
+                none: None,
+                some: once((
+                    Symbol::Paren,
+                    Curry {
+                        wildcard: None,
+                        specific: once((
+                            ')',
+                            Return(Edge::Return {
+                                call: call!(|x| x),
+                                dst: 0,
+                            }),
+                        ))
+                        .collect(),
                     },
-                ),
-                (
-                    ')',
-                    Edge::Return {
-                        dst: 0,
-                        call: call!(|x| x),
-                    },
-                ),
-            ]
-            .into_iter()
-            .collect(),
+                ))
+                .collect(),
+            },
             accepting: true,
         }],
         initial: 0,
@@ -80,7 +98,10 @@ pub fn main() {
         let s = generate(&mut rng);
         println!("{s}");
         let mut run = s.chars().run(&parser);
-        while run.next().is_some() {}
+        println!("    {run:?}");
+        while run.next().is_some() {
+            println!("    {run:?}");
+        }
         assert_eq!(run.ctrl, Err(true));
     }
 
@@ -89,7 +110,10 @@ pub fn main() {
         let s = shitpost(&mut rng);
         println!("{s}");
         let mut run = s.chars().run(&parser);
-        while run.next().is_some() {}
+        println!("    {run:?}");
+        while run.next().is_some() {
+            println!("    {run:?}");
+        }
         assert_eq!(run.ctrl, Err(accept(s.chars())));
     }
 }

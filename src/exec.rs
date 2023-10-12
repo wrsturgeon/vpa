@@ -9,11 +9,8 @@
 use crate::Indices;
 use core::mem::replace;
 
-#[cfg(any(test, debug_assertions))]
-use crate::Kind;
-
 /// Any executable automaton.
-pub trait Execute<A> {
+pub trait Execute<A: Ord, S: Ord> {
     /// Record of control flow (usually a state or a set of states).
     type Ctrl: Indices;
     /// Initial control flow.
@@ -22,33 +19,39 @@ pub trait Execute<A> {
     /// Read a token and update accordingly.
     /// # Errors
     /// If the automaton decides to accept or not to (check the Boolean).
-    fn step(&self, ctrl: Self::Ctrl, maybe_token: Option<&A>) -> Result<Self::Ctrl, bool>;
-    /// Ensure that each local token causes a local transition and so on.
-    /// # Errors
-    /// If a transition is inconsistent.
-    #[cfg(any(test, debug_assertions))]
-    fn check_consistency(&self) -> Result<(), (usize, Kind, Kind)>;
+    fn step(
+        &self,
+        ctrl: Self::Ctrl,
+        stack_top: Option<&S>,
+        maybe_token: Option<&A>,
+    ) -> Result<Self::Ctrl, bool>;
 }
 
 /// Execution of a visibly pushdown automaton on an input sequence.
 #[allow(clippy::exhaustive_structs)]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Execution<'a, A, E: Execute<A>, Iter: Iterator<Item = A>> {
+pub struct Execution<'a, A: Ord, S: Ord, E: Execute<A, S>, Iter: Iterator<Item = A>> {
     /// Reference to the automaton we're running.
     pub graph: &'a E,
     /// Input sequence as an iterator.
     pub iter: Iter,
     /// Current state in the automaton.
     pub ctrl: Result<E::Ctrl, bool>,
+    /// Current stack.
+    pub stack: Vec<S>,
 }
 
-impl<A, E: Execute<A>, Iter: Iterator<Item = A>> Iterator for Execution<'_, A, E, Iter> {
+impl<A: Ord, S: Ord, E: Execute<A, S>, Iter: Iterator<Item = A>> Iterator
+    for Execution<'_, A, S, E, Iter>
+{
     type Item = A;
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let maybe_token = self.iter.next();
-        self.ctrl = replace(&mut self.ctrl, Err(false))
-            .and_then(|ctrl| self.graph.step(ctrl, maybe_token.as_ref()));
+        self.ctrl = replace(&mut self.ctrl, Err(false)).and_then(|ctrl| {
+            self.graph
+                .step(ctrl, self.stack.last(), maybe_token.as_ref())
+        });
         maybe_token // <-- Propagate the iterator's input
     }
 }

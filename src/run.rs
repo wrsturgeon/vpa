@@ -9,25 +9,21 @@
 use crate::{Execute, Execution};
 
 /// Trait to run a visibly pushdown automaton on an input sequence.
-pub trait Run<A>: Iterator<Item = A> + Sized {
+pub trait Run<A: Ord>: Iterator<Item = A> + Sized {
     /// Run a visibly pushdown automaton on this input sequence.
     #[must_use]
-    fn run<E: Execute<A>>(self, graph: &E) -> Execution<'_, A, E, Self>;
+    fn run<S: Ord, E: Execute<A, S>>(self, graph: &E) -> Execution<'_, A, S, E, Self>;
 }
 
-impl<A, Iter: Iterator<Item = A>> Run<A> for Iter {
+impl<A: Ord, Iter: Iterator<Item = A>> Run<A> for Iter {
     #[inline]
     #[must_use]
-    fn run<E: Execute<A>>(self, graph: &E) -> Execution<'_, A, E, Self> {
-        #[allow(clippy::panic)]
-        #[cfg(any(test, debug_assertions))]
-        if let Err((i, a, b)) = graph.check_consistency() {
-            panic!("Internal error: state #{i} triggers a {b} transition on a {a} token");
-        }
+    fn run<S: Ord, E: Execute<A, S>>(self, graph: &E) -> Execution<'_, A, S, E, Self> {
         Execution {
             graph,
             iter: self,
             ctrl: Ok(graph.initial()),
+            stack: vec![],
         }
     }
 }

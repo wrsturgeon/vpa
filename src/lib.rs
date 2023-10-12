@@ -155,20 +155,24 @@ macro_rules! call {
 mod automaton;
 mod call;
 pub mod combinators;
+mod curry;
+mod curry_opt;
 mod edge;
 mod exec;
 mod indices;
-mod kind;
+mod lookup;
 mod run;
 mod state;
 
 pub use {
     automaton::{Automaton, Deterministic, Nondeterministic},
     call::Call,
+    curry::Curry,
+    curry_opt::CurryOpt,
     edge::Edge,
     exec::{Execute, Execution},
     indices::Indices,
-    kind::Kind,
+    lookup::{Lookup, Return},
     run::Run,
     state::State,
 };

@@ -8,9 +8,6 @@
 
 use crate::{Call, Indices};
 
-#[cfg(any(test, debug_assertions))]
-use crate::Kind;
-
 #[cfg(feature = "quickcheck")]
 use {
     core::num::NonZeroUsize,
@@ -20,13 +17,15 @@ use {
 /// Edge in a visibly pushdown automaton (everything except the source state and the token that triggers it).
 #[allow(clippy::exhaustive_enums)]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum Edge<Ctrl: Indices> {
+pub enum Edge<S: Ord, Ctrl: Indices> {
     /// Transition that causes a stack push.
     Call {
         /// Index of the machine's state after this transition.
         dst: Ctrl,
         /// Function to call when compiled to a source file.
         call: Call<(), ()>,
+        /// Symbol to push onto the stack.
+        push: S,
     },
     /// Transition that causes a stack pop.
     Return {
@@ -44,7 +43,7 @@ pub enum Edge<Ctrl: Indices> {
     },
 }
 
-impl<Ctrl: Indices> Edge<Ctrl> {
+impl<S: Ord, Ctrl: Indices> Edge<S, Ctrl> {
     /// Index of the machine's state after this transition.
     #[inline]
     pub const fn dst(&self) -> &Ctrl {
@@ -69,32 +68,21 @@ impl<Ctrl: Indices> Edge<Ctrl> {
     #[inline]
     #[cfg(feature = "quickcheck")]
     #[allow(clippy::arithmetic_side_effects)]
-    pub(crate) fn deabsurdify(mut self, size: NonZeroUsize) -> Self {
+    pub(crate) fn deabsurdify(&mut self, size: NonZeroUsize) {
         let dst = self.dst_mut();
         *dst = unwrap!(Indices::collect(dst.iter().map(|&i| i % size)));
-        self
-    }
-
-    /// Classify as a symbol (mostly to check consistency with the symbol that triggers it).
-    #[inline]
-    #[cfg(any(test, debug_assertions))]
-    pub(crate) const fn kind(&self) -> Kind {
-        match *self {
-            Self::Call { .. } => Kind::Call,
-            Self::Return { .. } => Kind::Return,
-            Self::Local { .. } => Kind::Local,
-        }
     }
 }
 
 #[cfg(feature = "quickcheck")]
-impl<Ctrl: Arbitrary + Indices> Arbitrary for Edge<Ctrl> {
+impl<S: Arbitrary + Ord, Ctrl: Arbitrary + Indices> Arbitrary for Edge<S, Ctrl> {
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
         let f: [fn(&mut Gen) -> Self; 3] = [
             |r| Self::Call {
                 dst: Arbitrary::arbitrary(r),
                 call: Arbitrary::arbitrary(r),
+                push: S::arbitrary(r),
             },
             |r| Self::Return {
                 dst: Arbitrary::arbitrary(r),
@@ -121,10 +109,14 @@ impl<Ctrl: Arbitrary + Indices> Arbitrary for Edge<Ctrl> {
                     .shrink()
                     .map(|(dst, call)| Self::Return { dst, call }),
             ),
-            Self::Call { ref dst, ref call } => Box::new(
-                (dst.clone(), call.clone())
+            Self::Call {
+                ref dst,
+                ref call,
+                ref push,
+            } => Box::new(
+                (dst.clone(), call.clone(), push.clone())
                     .shrink()
-                    .map(|(dst, call)| Self::Call { dst, call }),
+                    .map(|(dst, call, push)| Self::Call { dst, call, push }),
             ),
         }
     }
