@@ -39,7 +39,10 @@ cargo +nightly miri test -r --no-default-features --examples
 set +e
 export EXAMPLES=$(cargo run --example 2>&1 | grep '^ ')
 set -e
-echo $EXAMPLES | xargs -n 1 cargo +nightly miri run --example
+if [ ! -z "$EXAMPLES" ]
+then
+  echo $EXAMPLES | xargs -n 1 cargo +nightly miri run --example
+fi
 if [ -f run-examples.sh ]
 then
   ./run-examples.sh
