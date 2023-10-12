@@ -49,4 +49,4 @@ fi
 grep -Rnw . --exclude-dir=target --exclude-dir=.git --exclude=ci.sh -e FIXME && exit 1 || : # next line checks result
 
 # Print remaining `TODO`s
-grep -Rnw . --exclude-dir=target -e TODO || :
+grep -Rnw . --exclude-dir=target --exclude-dir=.git --exclude=ci.sh -e TODO || :

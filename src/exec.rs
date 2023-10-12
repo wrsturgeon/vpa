@@ -7,7 +7,7 @@
 //! Execution of a visibly pushdown automaton on an input sequence.
 
 use crate::Indices;
-use core::mem::replace;
+use core::{fmt, mem::replace};
 
 /// Any executable automaton.
 pub trait Execute<A: Ord, S: Ord> {
@@ -22,23 +22,44 @@ pub trait Execute<A: Ord, S: Ord> {
     fn step(
         &self,
         ctrl: Self::Ctrl,
-        stack_top: Option<&S>,
+        stack: &mut Vec<S>,
         maybe_token: Option<&A>,
-    ) -> Result<Self::Ctrl, bool>;
+    ) -> Result<Result<Self::Ctrl, bool>, IllFormed>;
 }
+
+/// Ran an automaton that tried to take a nonsensical action.
+/// TODO: Add fields to describe what went wrong.
+#[allow(clippy::exhaustive_structs)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct IllFormed;
 
 /// Execution of a visibly pushdown automaton on an input sequence.
 #[allow(clippy::exhaustive_structs)]
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Execution<'a, A: Ord, S: Ord, E: Execute<A, S>, Iter: Iterator<Item = A>> {
     /// Reference to the automaton we're running.
     pub graph: &'a E,
     /// Input sequence as an iterator.
     pub iter: Iter,
     /// Current state in the automaton.
-    pub ctrl: Result<E::Ctrl, bool>,
+    pub ctrl: Result<Result<E::Ctrl, bool>, IllFormed>,
     /// Current stack.
     pub stack: Vec<S>,
+}
+
+impl<A: Ord, S: fmt::Debug + Ord, E: Execute<A, S>, Iter: Iterator<Item = A>> fmt::Debug
+    for Execution<'_, A, S, E, Iter>
+where
+    E::Ctrl: fmt::Debug,
+{
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Execution {{ stack: {:?}, ctrl: {:?} }}",
+            self.stack, self.ctrl,
+        )
+    }
 }
 
 impl<A: Ord, S: Ord, E: Execute<A, S>, Iter: Iterator<Item = A>> Iterator
@@ -46,12 +67,19 @@ impl<A: Ord, S: Ord, E: Execute<A, S>, Iter: Iterator<Item = A>> Iterator
 {
     type Item = A;
     #[inline]
+    #[allow(clippy::unwrap_in_result)]
     fn next(&mut self) -> Option<Self::Item> {
         let maybe_token = self.iter.next();
-        self.ctrl = replace(&mut self.ctrl, Err(false)).and_then(|ctrl| {
-            self.graph
-                .step(ctrl, self.stack.last(), maybe_token.as_ref())
-        });
+        if matches!(self.ctrl, Ok(Ok(_))) {
+            self.ctrl = self.graph.step(
+                #[allow(unused_unsafe)] // the macro nests two `unsafe` blocks
+                {
+                    unwrap!(unwrap!(replace(&mut self.ctrl, Err(IllFormed))))
+                },
+                &mut self.stack,
+                maybe_token.as_ref(),
+            );
+        }
         maybe_token // <-- Propagate the iterator's input
     }
 }

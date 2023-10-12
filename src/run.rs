@@ -22,7 +22,7 @@ impl<A: Ord, Iter: Iterator<Item = A>> Run<A> for Iter {
         Execution {
             graph,
             iter: self,
-            ctrl: Ok(graph.initial()),
+            ctrl: Ok(Ok(graph.initial())),
             stack: vec![],
         }
     }

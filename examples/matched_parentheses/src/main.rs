@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use core::iter::once;
 use rand::{thread_rng, RngCore};
 use vpa::{call, Automaton, Curry, CurryOpt, Deterministic, Edge, Return, Run, State};
@@ -94,7 +97,7 @@ pub fn main() {
     let mut rng = thread_rng();
 
     // Accept all valid strings
-    for _ in 0..50 {
+    for _ in 0..10 {
         let s = generate(&mut rng);
         println!("{s}");
         let mut run = s.chars().run(&parser);
@@ -102,11 +105,11 @@ pub fn main() {
         while run.next().is_some() {
             println!("    {run:?}");
         }
-        assert_eq!(run.ctrl, Err(true));
+        assert_eq!(run.ctrl, Ok(Err(true)));
     }
 
     // Reject all invalid strings
-    for _ in 0..50 {
+    for _ in 0..10 {
         let s = shitpost(&mut rng);
         println!("{s}");
         let mut run = s.chars().run(&parser);
@@ -114,6 +117,6 @@ pub fn main() {
         while run.next().is_some() {
             println!("    {run:?}");
         }
-        assert_eq!(run.ctrl, Err(accept(s.chars())));
+        assert_eq!(run.ctrl, Ok(Err(accept(s.chars()))));
     }
 }

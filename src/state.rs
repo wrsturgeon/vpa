@@ -18,14 +18,14 @@ use {
 /// A state in a visibly pushdown automaton.
 #[allow(clippy::exhaustive_structs)]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct State<A: 'static + Ord, S: 'static + Ord, Ctrl: 'static + Indices> {
+pub struct State<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indices> {
     /// State transitions.
     pub transitions: CurryOpt<S, Curry<A, Return<Edge<S, Ctrl>>>>,
     /// Whether an automaton in this state should accept when input ends.
     pub accepting: bool,
 }
 
-impl<A: Ord, S: Ord, Ctrl: Indices> State<A, S, Ctrl> {
+impl<A: Ord, S: Copy + Ord, Ctrl: Indices> State<A, S, Ctrl> {
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
     #[cfg(feature = "quickcheck")]
@@ -35,7 +35,7 @@ impl<A: Ord, S: Ord, Ctrl: Indices> State<A, S, Ctrl> {
 }
 
 #[cfg(feature = "quickcheck")]
-impl<A: Arbitrary + Ord, S: Arbitrary + Ord, Ctrl: 'static + Arbitrary + Indices> Arbitrary
+impl<A: Arbitrary + Ord, S: Arbitrary + Copy + Ord, Ctrl: 'static + Arbitrary + Indices> Arbitrary
     for State<A, S, Ctrl>
 {
     #[inline]

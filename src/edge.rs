@@ -6,7 +6,7 @@
 
 //! Edge in a visibly pushdown automaton (everything except the source state and the token that triggers it).
 
-use crate::{Call, Indices};
+use crate::{Call, IllFormed, Indices, Merge};
 
 #[cfg(feature = "quickcheck")]
 use {
@@ -17,7 +17,7 @@ use {
 /// Edge in a visibly pushdown automaton (everything except the source state and the token that triggers it).
 #[allow(clippy::exhaustive_enums)]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum Edge<S: Ord, Ctrl: Indices> {
+pub enum Edge<S: Copy + Ord, Ctrl: Indices> {
     /// Transition that causes a stack push.
     Call {
         /// Index of the machine's state after this transition.
@@ -43,7 +43,62 @@ pub enum Edge<S: Ord, Ctrl: Indices> {
     },
 }
 
-impl<S: Ord, Ctrl: Indices> Edge<S, Ctrl> {
+impl<S: Copy + Ord, Ctrl: Indices> Merge for Edge<S, Ctrl> {
+    #[inline]
+    fn merge(self, other: &Self) -> Result<Self, IllFormed> {
+        match (self, other) {
+            (
+                Self::Call {
+                    dst: ldst,
+                    call: lcall,
+                    push: lpush,
+                },
+                &Self::Call {
+                    dst: ref rdst,
+                    call: ref rcall,
+                    push: ref rpush,
+                },
+            ) => Ok(Self::Call {
+                dst: ldst.merge(rdst)?,
+                call: lcall.merge(rcall)?,
+                push: if lpush == *rpush {
+                    lpush
+                } else {
+                    return Err(IllFormed);
+                },
+            }),
+            (
+                Self::Return {
+                    dst: ldst,
+                    call: lcall,
+                },
+                &Self::Return {
+                    dst: ref rdst,
+                    call: ref rcall,
+                },
+            ) => Ok(Self::Return {
+                dst: ldst.merge(rdst)?,
+                call: lcall.merge(rcall)?,
+            }),
+            (
+                Self::Local {
+                    dst: ldst,
+                    call: lcall,
+                },
+                &Self::Local {
+                    dst: ref rdst,
+                    call: ref rcall,
+                },
+            ) => Ok(Self::Return {
+                dst: ldst.merge(rdst)?,
+                call: lcall.merge(rcall)?,
+            }),
+            (_, _) => Err(IllFormed),
+        }
+    }
+}
+
+impl<S: Copy + Ord, Ctrl: Indices> Edge<S, Ctrl> {
     /// Index of the machine's state after this transition.
     #[inline]
     pub const fn dst(&self) -> &Ctrl {
@@ -63,6 +118,24 @@ impl<S: Ord, Ctrl: Indices> Edge<S, Ctrl> {
             | Self::Local { ref mut dst, .. } => dst,
         }
     }
+    /// Take this edge in an actual execution. Return the index of the machine's state after this transition.
+    /// # Errors
+    /// If we try to pop the stack and it's empty.
+    #[inline]
+    pub fn invoke(self, stack: &mut Vec<S>) -> Result<Ctrl, bool> {
+        match self {
+            Self::Call {
+                dst,
+                call: _call,
+                push,
+            } => {
+                stack.push(push);
+                Ok(dst)
+            }
+            Self::Return { dst, call: _call } => stack.pop().map_or(Err(false), |_| Ok(dst)),
+            Self::Local { dst, call: _call } => Ok(dst),
+        }
+    }
 
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
@@ -75,7 +148,7 @@ impl<S: Ord, Ctrl: Indices> Edge<S, Ctrl> {
 }
 
 #[cfg(feature = "quickcheck")]
-impl<S: Arbitrary + Ord, Ctrl: Arbitrary + Indices> Arbitrary for Edge<S, Ctrl> {
+impl<S: Arbitrary + Copy + Ord, Ctrl: Arbitrary + Indices> Arbitrary for Edge<S, Ctrl> {
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
         let f: [fn(&mut Gen) -> Self; 3] = [
@@ -112,9 +185,9 @@ impl<S: Arbitrary + Ord, Ctrl: Arbitrary + Indices> Arbitrary for Edge<S, Ctrl> 
             Self::Call {
                 ref dst,
                 ref call,
-                ref push,
+                push,
             } => Box::new(
-                (dst.clone(), call.clone(), push.clone())
+                (dst.clone(), call.clone(), push)
                     .shrink()
                     .map(|(dst, call, push)| Self::Call { dst, call, push }),
             ),

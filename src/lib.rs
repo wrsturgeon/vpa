@@ -87,7 +87,6 @@
 )]
 
 /// Unwrap if we're debugging but `unwrap_unchecked` if we're not.
-#[cfg(feature = "quickcheck")]
 #[cfg(any(debug_assertions, test))]
 macro_rules! unwrap {
     ($expr:expr) => {
@@ -96,7 +95,6 @@ macro_rules! unwrap {
 }
 
 /// Unwrap if we're debugging but `unwrap_unchecked` if we're not.
-#[cfg(feature = "quickcheck")]
 #[cfg(not(any(debug_assertions, test)))]
 macro_rules! unwrap {
     ($expr:expr) => {{
@@ -161,6 +159,7 @@ mod edge;
 mod exec;
 mod indices;
 mod lookup;
+mod merge;
 mod run;
 mod state;
 
@@ -170,9 +169,10 @@ pub use {
     curry::Curry,
     curry_opt::CurryOpt,
     edge::Edge,
-    exec::{Execute, Execution},
+    exec::{Execute, Execution, IllFormed},
     indices::Indices,
     lookup::{Lookup, Return},
+    merge::Merge,
     run::Run,
     state::State,
 };

@@ -6,7 +6,7 @@
 
 //! Visibly pushdown automata.
 
-use crate::{Execute, Indices, Lookup, State};
+use crate::{Execute, IllFormed, Indices, Lookup, Merge, State};
 use std::collections::BTreeSet;
 
 #[cfg(feature = "quickcheck")]
@@ -23,14 +23,16 @@ pub type Nondeterministic<A, S> = Automaton<A, S, BTreeSet<usize>>;
 /// Visibly pushdown automaton containing all states.
 #[allow(clippy::exhaustive_structs)]
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Automaton<A: 'static + Ord, S: 'static + Ord, Ctrl: 'static + Indices> {
+pub struct Automaton<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indices> {
     /// Every state in the automaton.
     pub states: Vec<State<A, S, Ctrl>>,
     /// Index of the state of the machine before parsing any input.
     pub initial: Ctrl,
 }
 
-impl<A: 'static + Ord, S: 'static + Ord, Ctrl: Indices> Execute<A, S> for Automaton<A, S, Ctrl> {
+impl<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: Indices> Execute<A, S>
+    for Automaton<A, S, Ctrl>
+{
     type Ctrl = Ctrl;
     #[inline]
     fn initial(&self) -> Self::Ctrl {
@@ -40,22 +42,25 @@ impl<A: 'static + Ord, S: 'static + Ord, Ctrl: Indices> Execute<A, S> for Automa
     fn step(
         &self,
         ctrl: Self::Ctrl,
-        stack_top: Option<&S>,
+        stack: &mut Vec<S>,
         maybe_token: Option<&A>,
-    ) -> Result<Self::Ctrl, bool> {
+    ) -> Result<Result<Self::Ctrl, bool>, IllFormed> {
         let mut states = ctrl.iter().map(|&i| get!(self.states, i));
-        match maybe_token {
-            None => Err(states.any(|s| s.accepting)),
-            Some(token) => Ctrl::collect(
-                states
-                    .filter_map(|s| s.transitions.get((stack_top, (token, ()))))
-                    .flat_map(|edge| edge.dst().iter().copied()),
-            ),
-        }
+        let Some(token) = maybe_token else {
+            return Ok(Err(stack.is_empty() && states.any(|s| s.accepting)));
+        };
+        let maybe_stack_top = stack.last();
+        let mut edges = states.filter_map(|s| s.transitions.get((maybe_stack_top, (token, ()))));
+        let Some(first_edge) = edges.next() else {
+            return Ok(Err(false));
+        };
+        let init = Ok(first_edge.clone());
+        let mega_edge = edges.fold(init, |r, e| r.and_then(|acc| acc.merge(e)))?;
+        Ok(mega_edge.invoke(stack))
     }
 }
 
-impl<A: Ord, S: Ord, Ctrl: Indices> Automaton<A, S, Ctrl> {
+impl<A: Ord, S: Copy + Ord, Ctrl: Indices> Automaton<A, S, Ctrl> {
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
     #[cfg(feature = "quickcheck")]
@@ -71,7 +76,7 @@ impl<A: Ord, S: Ord, Ctrl: Indices> Automaton<A, S, Ctrl> {
 }
 
 #[cfg(feature = "quickcheck")]
-impl<A: Arbitrary + Ord, S: Arbitrary + Ord, Ctrl: 'static + Arbitrary + Indices> Arbitrary
+impl<A: Arbitrary + Ord, S: Arbitrary + Copy + Ord, Ctrl: 'static + Arbitrary + Indices> Arbitrary
     for Automaton<A, S, Ctrl>
 {
     #[inline]
