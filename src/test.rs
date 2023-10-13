@@ -72,22 +72,20 @@ mod reduced {
 
     // Automaton { states: [State { transitions: CurryOpt { wildcard: None, none: None, some: {} }, accepting: false }], initial: {} }, []
 
-    fn subset_construction_bool_bool(nd: Nondeterministic<bool, bool>, inputs: Vec<Vec<bool>>) {
+    fn subset_construction_bool_bool(nd: &Nondeterministic<bool, bool>, input: &[bool]) {
         let Ok(d) = nd.determinize() else {
             return;
         };
-        for input in inputs {
-            assert_eq!(
-                nd.accept(input.iter().copied()).unwrap(),
-                d.accept(input).unwrap()
-            );
-        }
+        assert_eq!(
+            nd.accept(input.iter().copied()).unwrap(),
+            d.accept(input.iter().copied()).unwrap()
+        );
     }
 
     #[test]
     fn subset_construction_bool_bool_1() {
         subset_construction_bool_bool(
-            Automaton {
+            &Automaton {
                 states: vec![State {
                     transitions: CurryOpt {
                         wildcard: None,
@@ -98,7 +96,7 @@ mod reduced {
                 }],
                 initial: BTreeSet::new(),
             },
-            vec![],
+            &[],
         );
     }
 }
