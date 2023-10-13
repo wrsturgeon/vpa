@@ -143,7 +143,9 @@ impl<S: Copy + Ord, Ctrl: Indices> Edge<S, Ctrl> {
     #[allow(clippy::arithmetic_side_effects)]
     pub(crate) fn deabsurdify(&mut self, size: NonZeroUsize) {
         let dst = self.dst_mut();
-        *dst = unwrap!(Indices::collect(dst.iter().map(|&i| i % size)));
+        if let Ok(modulo) = Indices::collect(dst.iter().map(|&i| i % size)) {
+            *dst = modulo;
+        }
     }
 }
 

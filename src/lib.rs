@@ -164,6 +164,9 @@ mod run;
 mod state;
 mod subc;
 
+#[cfg(test)]
+mod test;
+
 pub use {
     automaton::{Automaton, Deterministic, Nondeterministic},
     call::Call,

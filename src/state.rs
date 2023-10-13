@@ -25,6 +25,17 @@ pub struct State<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indi
     pub accepting: bool,
 }
 
+impl<A: Ord, S: Copy + Ord, Ctrl: Indices> Default for State<A, S, Ctrl> {
+    #[inline]
+    #[allow(clippy::default_trait_access)]
+    fn default() -> Self {
+        Self {
+            transitions: Default::default(),
+            accepting: false,
+        }
+    }
+}
+
 impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices> Merge for State<A, S, Ctrl> {
     #[inline]
     fn merge(self, other: &Self) -> Result<Self, crate::IllFormed> {

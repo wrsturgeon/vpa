@@ -1,0 +1,12 @@
+[package]
+name = "matched_parentheses"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+quickcheck = { version = "1.0.3", optional = true }
+rand = "0.8.5"
+vpa = { path = "../.." }
+
+[features]
+quickcheck = ["dep:quickcheck"]

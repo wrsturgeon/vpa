@@ -28,7 +28,7 @@ use quickcheck::{Arbitrary, Gen};
 /// I don't want to impose a `Clone` bound on a type that never actually needs to be cloned
 /// just because an interpreter would be easier to write if it were `Clone`.
 #[allow(clippy::exhaustive_structs)]
-#[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct CurryOpt<Arg: Ord, Etc: Lookup> {
     /// First, try to match this, no matter what the argument was.
     pub wildcard: Option<Etc>,
@@ -36,6 +36,17 @@ pub struct CurryOpt<Arg: Ord, Etc: Lookup> {
     pub none: Option<Etc>,
     /// If the wildcard match didn't work, try this if the argument is `Some(..)`.
     pub some: BTreeMap<Arg, Etc>,
+}
+
+impl<Arg: Ord, Etc: Lookup> Default for CurryOpt<Arg, Etc> {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            wildcard: None,
+            none: None,
+            some: BTreeMap::new(),
+        }
+    }
 }
 
 impl<Arg: 'static + Ord, Etc: 'static + Lookup> Lookup for CurryOpt<Arg, Etc> {
@@ -131,6 +142,17 @@ impl<'a, Arg: Ord, Etc: Lookup> IntoIterator for &'a CurryOpt<Arg, Etc> {
             .map((|some| (None, some)) as _)
             .chain(self.none.iter().map((|some| (Some(None), some)) as _))
             .chain(self.some.iter().map((|(k, v)| (Some(Some(k)), v)) as _))
+    }
+}
+
+impl<Arg: Ord, Etc: Lookup> CurryOpt<Arg, Etc> {
+    /// Iterate over values only, ignoring keys.
+    #[inline]
+    pub fn values(&self) -> impl Iterator<Item = &Etc> {
+        self.wildcard
+            .iter()
+            .chain(self.none.iter())
+            .chain(self.some.values())
     }
 }
 

@@ -61,6 +61,19 @@ impl<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: Indices> Execute<A, S>
 }
 
 impl<A: Ord, S: Copy + Ord, Ctrl: Indices> Automaton<A, S, Ctrl> {
+    /// Run to completion and return whether or not the input was valid.
+    /// # Errors
+    /// If the parser itself is ill-formed and tries to take a nonsensical action.
+    #[inline]
+    #[allow(clippy::unreachable)]
+    pub fn accept<I: IntoIterator<Item = A>>(&self, i: I) -> Result<bool, IllFormed> {
+        use crate::Run;
+        let mut run = i.into_iter().run(self);
+        while run.next().is_some() {}
+        run.ctrl
+            .map(|r| if let Err(b) = r { b } else { unreachable!() })
+    }
+
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
     #[cfg(feature = "quickcheck")]

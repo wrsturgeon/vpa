@@ -18,12 +18,22 @@ use quickcheck::{Arbitrary, Gen};
 
 /// Map from a potential wildcard to _another map_.
 #[allow(clippy::exhaustive_structs)]
-#[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Curry<Arg: Ord, Etc: Lookup> {
     /// First, try to match this, no matter what the argument was.
     pub wildcard: Option<Etc>,
     /// If the wildcard match didn't work, try this.
     pub specific: BTreeMap<Arg, Etc>,
+}
+
+impl<Arg: Ord, Etc: Lookup> Default for Curry<Arg, Etc> {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            wildcard: None,
+            specific: BTreeMap::new(),
+        }
+    }
 }
 
 impl<Arg: 'static + Ord, Etc: 'static + Lookup> Lookup for Curry<Arg, Etc> {
@@ -85,6 +95,14 @@ impl<Arg: Ord, Etc: Lookup> IntoIterator for Curry<Arg, Etc> {
             .into_iter()
             .map((|some| (None, some)) as _)
             .chain(self.specific.into_iter().map((|(k, v)| (Some(k), v)) as _))
+    }
+}
+
+impl<Arg: Ord, Etc: Lookup> Curry<Arg, Etc> {
+    /// Iterate over values only, ignoring keys.
+    #[inline]
+    pub fn values(&self) -> impl Iterator<Item = &Etc> {
+        self.wildcard.iter().chain(self.specific.values())
     }
 }
 

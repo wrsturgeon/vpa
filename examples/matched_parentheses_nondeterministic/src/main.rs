@@ -3,7 +3,7 @@ mod test;
 
 use core::iter::once;
 use rand::{thread_rng, RngCore};
-use vpa::{call, Automaton, Curry, CurryOpt, Deterministic, Edge, Return, Run, State};
+use vpa::{call, Automaton, Curry, CurryOpt, Edge, Nondeterministic, Return, Run, State};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Symbol {
@@ -11,7 +11,7 @@ enum Symbol {
 }
 
 /// Very manually constructed parser recognizing only valid parentheses.
-fn parser() -> Deterministic<char, Symbol> {
+fn parser() -> Nondeterministic<char, Symbol> {
     Automaton {
         states: vec![State {
             transitions: CurryOpt {
@@ -21,7 +21,7 @@ fn parser() -> Deterministic<char, Symbol> {
                         '(',
                         Return(Edge::Call {
                             call: call!(|x| x),
-                            dst: 0,
+                            dst: once(0).collect(),
                             push: Symbol::Paren,
                         }),
                     ))
@@ -36,7 +36,7 @@ fn parser() -> Deterministic<char, Symbol> {
                             ')',
                             Return(Edge::Return {
                                 call: call!(|x| x),
-                                dst: 0,
+                                dst: once(0).collect(),
                             }),
                         ))
                         .collect(),
@@ -46,7 +46,7 @@ fn parser() -> Deterministic<char, Symbol> {
             },
             accepting: true,
         }],
-        initial: 0,
+        initial: once(0).collect(),
     }
 }
 
@@ -92,7 +92,7 @@ fn shitpost<R: RngCore>(rng: &mut R) -> String {
 }
 
 pub fn main() {
-    let parser = parser();
+    let parser = parser().determinize().unwrap();
 
     let mut rng = thread_rng();
 
