@@ -5,8 +5,8 @@ set -eux
 export MIRIFLAGS=-Zmiri-backtrace=1
 
 # Update our workbench
-rustup update
-rustup toolchain install nightly
+rustup update || :
+rustup toolchain install nightly || :
 rustup component add miri --toolchain nightly
 
 # Housekeeping

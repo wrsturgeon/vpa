@@ -23,7 +23,7 @@
         });
         settings = {
           cargoBuildOptions = orig: orig ++ [ "--examples" ];
-          doCheck = true;
+          # doCheck = true;
           doDocFail = true;
           gitAllRefs = true;
           gitSubmodules = true;

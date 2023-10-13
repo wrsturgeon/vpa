@@ -16,6 +16,10 @@ mod prop {
 
     quickcheck! {
 
+        fn range_overlap_commutativity(a: Range<u8>, b: Range<u8>) -> bool {
+            a.overlap(&b) == b.overlap(&a)
+        }
+
         fn subset_construction_bool_bool(nd: Nondeterministic<bool, bool>, inputs: Vec<Vec<bool>>) -> TestResult {
             let Ok(d) = nd.determinize() else {
                 return TestResult::discard();

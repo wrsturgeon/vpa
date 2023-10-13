@@ -41,6 +41,14 @@ impl<T: Clone + Merge> Merge for Option<T> {
     }
 }
 
+impl<T: Clone> Merge for Vec<T> {
+    #[inline(always)]
+    fn merge(mut self, other: &Self) -> Result<Self, IllFormed> {
+        self.extend(other.iter().cloned());
+        Ok(self)
+    }
+}
+
 impl<T: Clone + Ord> Merge for BTreeSet<T> {
     #[inline(always)]
     fn merge(mut self, other: &Self) -> Result<Self, IllFormed> {

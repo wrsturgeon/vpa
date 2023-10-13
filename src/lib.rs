@@ -160,6 +160,7 @@ mod exec;
 mod indices;
 mod lookup;
 mod merge;
+mod range;
 mod run;
 mod state;
 mod subc;
@@ -177,6 +178,7 @@ pub use {
     indices::Indices,
     lookup::{Lookup, Return},
     merge::{merge, Merge},
+    range::Range,
     run::Run,
     state::State,
 };
