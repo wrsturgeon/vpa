@@ -39,8 +39,8 @@ mod prop {
             return TestResult::failed();
         }
         println!("Tested {:?} in {:?}", input, start.elapsed());
-        // TestResult::passed()
-        panic!("euthanasia")
+        TestResult::passed()
+        // panic!("euthanasia")
     }
 
     quickcheck! {
@@ -53,17 +53,17 @@ mod prop {
             subset_construction(&nd, &inputs)
         }
 
-        // fn subset_construction_bool_u8(nd: Nondeterministic<bool, u8>, inputs: Vec<Vec<bool>>) -> TestResult {
-        //     subset_construction(&nd, &inputs)
-        // }
+        fn subset_construction_bool_u8(nd: Nondeterministic<bool, u8>, inputs: Vec<Vec<bool>>) -> TestResult {
+            subset_construction(&nd, &inputs)
+        }
 
-        // fn subset_construction_u8_bool(nd: Nondeterministic<u8, bool>, inputs: Vec<Vec<u8>>) -> TestResult {
-        //     subset_construction(&nd, &inputs)
-        // }
+        fn subset_construction_u8_bool(nd: Nondeterministic<u8, bool>, inputs: Vec<Vec<u8>>) -> TestResult {
+            subset_construction(&nd, &inputs)
+        }
 
-        // fn subset_construction_u8_u8(nd: Nondeterministic<u8, u8>, inputs: Vec<Vec<u8>>) -> TestResult {
-        //     subset_construction(&nd, &inputs)
-        // }
+        fn subset_construction_u8_u8(nd: Nondeterministic<u8, u8>, inputs: Vec<Vec<u8>>) -> TestResult {
+            subset_construction(&nd, &inputs)
+        }
 
     }
 }
