@@ -4,11 +4,19 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-#![allow(clippy::unwrap_used)]
+#![allow(
+    clippy::panic,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::use_debug
+)]
 
 use crate::*;
 use core::iter::once;
 use std::collections::{BTreeMap, BTreeSet};
+
+#[cfg(feature = "quickcheck")]
+use core::fmt;
 
 #[cfg(feature = "quickcheck")]
 mod prop {
@@ -16,7 +24,7 @@ mod prop {
     use quickcheck::*;
 
     #[inline]
-    fn subset_construction<K: Copy + Ord, S: Copy + Ord>(
+    fn subset_construction<K: Copy + fmt::Debug + Ord, S: Copy + Ord>(
         nd: &Nondeterministic<K, S>,
         inputs: &[Vec<K>],
     ) -> TestResult {
