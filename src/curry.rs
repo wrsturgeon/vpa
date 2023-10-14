@@ -56,9 +56,10 @@ impl<Arg: 'static + Ord, Etc: 'static + Lookup> Lookup for Curry<Arg, Etc> {
             woohoo
         } else {
             // TODO: break this apart and simplify it to remove throwing away a value then indexing to get it back again
-            let i = unwrap!(self
+            let i = self
                 .specific
-                .binary_search_by(|&(ref range, _)| range.contains(head)));
+                .binary_search_by(|&(ref range, _)| range.contains(head))
+                .ok()?;
             self.specific.get(i).and_then(|&(_, ref etc)| etc.get(tail))
         }
     }

@@ -20,16 +20,24 @@ mod prop {
         nd: &Nondeterministic<K, S>,
         inputs: &[Vec<K>],
     ) -> TestResult {
+        use std::time::Instant;
+        let mut start = Instant::now();
         let Ok(d) = nd.determinize() else {
             return TestResult::discard();
         };
+        println!("Determinized in {:?}", start.elapsed());
+        start = Instant::now();
         for input in inputs {
+            let test_start = Instant::now();
             if nd.accept(input.iter().copied()).unwrap() != d.accept(input.iter().copied()).unwrap()
             {
                 return TestResult::failed();
             }
+            println!("Tested {:?} in {:?}", input, test_start.elapsed());
         }
-        TestResult::passed()
+        println!("Tested {} inputs in {:?}", inputs.len(), start.elapsed());
+        // TestResult::passed()
+        panic!("euthanasia")
     }
 
     quickcheck! {
@@ -92,7 +100,7 @@ mod reduced {
 
     #[test]
     fn subset_construction_2() {
-        subset_construction::<u8, u8>(
+        subset_construction::<bool, bool>(
             &Automaton {
                 states: vec![State {
                     transitions: CurryOpt {
@@ -107,7 +115,7 @@ mod reduced {
                 }],
                 initial: once(0).collect(),
             },
-            &[0],
+            &[false],
         );
     }
 }
