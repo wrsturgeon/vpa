@@ -26,7 +26,7 @@ mod prop {
     #[inline]
     fn subset_construction<K: Copy + fmt::Debug + Ord, S: Copy + Ord>(
         nd: &Nondeterministic<K, S>,
-        inputs: &[Vec<K>],
+        input: &[K],
     ) -> TestResult {
         use std::time::Instant;
         let mut start = Instant::now();
@@ -35,15 +35,10 @@ mod prop {
         };
         println!("Determinized in {:?}", start.elapsed());
         start = Instant::now();
-        for input in inputs {
-            let test_start = Instant::now();
-            if nd.accept(input.iter().copied()).unwrap() != d.accept(input.iter().copied()).unwrap()
-            {
-                return TestResult::failed();
-            }
-            println!("Tested {:?} in {:?}", input, test_start.elapsed());
+        if nd.accept(input.iter().copied()).unwrap() != d.accept(input.iter().copied()).unwrap() {
+            return TestResult::failed();
         }
-        println!("Tested {} inputs in {:?}", inputs.len(), start.elapsed());
+        println!("Tested {:?} in {:?}", input, start.elapsed());
         // TestResult::passed()
         panic!("euthanasia")
     }
@@ -54,21 +49,21 @@ mod prop {
             a.overlap(&b) == b.overlap(&a)
         }
 
-        fn subset_construction_bool_bool(nd: Nondeterministic<bool, bool>, inputs: Vec<Vec<bool>>) -> TestResult {
+        fn subset_construction_bool_bool(nd: Nondeterministic<bool, bool>, inputs: Vec<bool>) -> TestResult {
             subset_construction(&nd, &inputs)
         }
 
-        fn subset_construction_bool_u8(nd: Nondeterministic<bool, u8>, inputs: Vec<Vec<bool>>) -> TestResult {
-            subset_construction(&nd, &inputs)
-        }
+        // fn subset_construction_bool_u8(nd: Nondeterministic<bool, u8>, inputs: Vec<Vec<bool>>) -> TestResult {
+        //     subset_construction(&nd, &inputs)
+        // }
 
-        fn subset_construction_u8_bool(nd: Nondeterministic<u8, bool>, inputs: Vec<Vec<u8>>) -> TestResult {
-            subset_construction(&nd, &inputs)
-        }
+        // fn subset_construction_u8_bool(nd: Nondeterministic<u8, bool>, inputs: Vec<Vec<u8>>) -> TestResult {
+        //     subset_construction(&nd, &inputs)
+        // }
 
-        fn subset_construction_u8_u8(nd: Nondeterministic<u8, u8>, inputs: Vec<Vec<u8>>) -> TestResult {
-            subset_construction(&nd, &inputs)
-        }
+        // fn subset_construction_u8_u8(nd: Nondeterministic<u8, u8>, inputs: Vec<Vec<u8>>) -> TestResult {
+        //     subset_construction(&nd, &inputs)
+        // }
 
     }
 }
