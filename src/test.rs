@@ -162,4 +162,55 @@ mod reduced {
             &[false, false],
         );
     }
+
+    #[test]
+    fn subset_construction_4() {
+        subset_construction(
+            &Automaton {
+                states: vec![State {
+                    transitions: CurryOpt {
+                        wildcard: None,
+                        none: Some(Curry {
+                            wildcard: None,
+                            specific: vec![(
+                                Range {
+                                    first: false,
+                                    last: false,
+                                },
+                                Return(Edge::Call {
+                                    dst: once(0).collect(),
+                                    call: call!(|x| x),
+                                    push: false,
+                                }),
+                            )],
+                        }),
+                        some: once((
+                            false,
+                            Curry {
+                                wildcard: Some(Return(Edge::Call {
+                                    dst: BTreeSet::new(),
+                                    call: call!(|x| x),
+                                    push: false,
+                                })),
+                                specific: vec![(
+                                    Range {
+                                        first: false,
+                                        last: false,
+                                    },
+                                    Return(Edge::Return {
+                                        dst: BTreeSet::new(),
+                                        call: call!(|x| x),
+                                    }),
+                                )],
+                            },
+                        ))
+                        .collect(),
+                    },
+                    accepting: false,
+                }],
+                initial: once(0).collect(),
+            },
+            &[false, false],
+        );
+    }
 }
