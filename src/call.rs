@@ -56,7 +56,7 @@ impl<I, O> Merge for Call<I, O> {
         if self == *other {
             Ok(self)
         } else {
-            Err(IllFormed)
+            Err(IllFormed::Ambiguity)
         }
     }
 }

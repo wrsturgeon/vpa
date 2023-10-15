@@ -64,7 +64,7 @@ impl<S: Copy + Ord, Ctrl: Indices> Merge for Edge<S, Ctrl> {
                 push: if lpush == *rpush {
                     lpush
                 } else {
-                    return Err(IllFormed);
+                    return Err(IllFormed::Ambiguity);
                 },
             }),
             (
@@ -93,7 +93,7 @@ impl<S: Copy + Ord, Ctrl: Indices> Merge for Edge<S, Ctrl> {
                 dst: ldst.merge(rdst)?,
                 call: lcall.merge(rcall)?,
             }),
-            (_, _) => Err(IllFormed),
+            (_, _) => Err(IllFormed::Ambiguity),
         }
     }
 }

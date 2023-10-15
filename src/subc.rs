@@ -12,6 +12,9 @@ use crate::{
 use core::{borrow::Borrow, iter::once};
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
+/// Depth to recurse during subset construction before giving up.
+const FUEL: u8 = 8;
+
 impl<A: Ord, S: Copy + Ord> Deterministic<A, S> {
     /// Generalize a deterministic automaton to an identical but nominally nondeterministic automaton.
     #[inline]
@@ -167,7 +170,7 @@ impl<A: Ord, S: Copy + Ord> Nondeterministic<A, S> {
         // Associate each subset of states with a merged state
         let mut subsets_as_states: BTreeMap<BTreeSet<usize>, State<A, S, BTreeSet<usize>>> =
             BTreeMap::new();
-        self.explore(&mut subsets_as_states, self.initial.clone())?;
+        self.explore(&mut subsets_as_states, self.initial.clone(), FUEL)?;
 
         // Fix an ordering on those subsets
         let mut ordering: Vec<BTreeSet<usize>> = subsets_as_states.keys().cloned().collect();
@@ -198,17 +201,26 @@ impl<A: Ord, S: Copy + Ord> Nondeterministic<A, S> {
         &self,
         subsets_as_states: &mut BTreeMap<BTreeSet<usize>, State<A, S, BTreeSet<usize>>>,
         subset: BTreeSet<usize>,
+        fuel: u8,
     ) -> Result<(), IllFormed>
     where
         A: Clone,
     {
+        // Check for timeout
+        let Some(used_fuel) = fuel.checked_sub(1) else {
+            return Err(IllFormed::TimedOut);
+        };
+
         // Merge all states into one (here's most of the heavy lifting)
         let mega_state: State<_, _, _> = match merge(self.get_states(subset.clone())) {
             None => {
                 drop(subsets_as_states.insert(BTreeSet::new(), State::default()));
                 return Ok(());
             }
-            Some(r) => r?,
+            Some(r) => match r {
+                Ok(state) => state,
+                Err(e) => return Err(e),
+            },
         };
 
         // Check if we've seen this subset already
@@ -230,7 +242,8 @@ impl<A: Ord, S: Copy + Ord> Nondeterministic<A, S> {
         let _ = entry.insert(mega_state);
 
         // Recurse on all destinations
-        dsts.into_iter()
-            .try_fold((), |(), dst| self.explore(subsets_as_states, dst))
+        dsts.into_iter().try_fold((), |(), dst| {
+            self.explore(subsets_as_states, dst, used_fuel)
+        })
     }
 }

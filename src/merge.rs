@@ -24,7 +24,7 @@ impl Merge for usize {
         if self == *other {
             Ok(self)
         } else {
-            Err(IllFormed)
+            Err(IllFormed::Ambiguity)
         }
     }
 }
@@ -62,7 +62,7 @@ impl<K: Clone + Ord, V: Clone> Merge for BTreeMap<K, V> {
     fn merge(mut self, other: &Self) -> Result<Self, IllFormed> {
         for (k, v) in other {
             if self.insert(k.clone(), v.clone()).is_some() {
-                return Err(IllFormed);
+                return Err(IllFormed::Ambiguity);
             }
         }
         Ok(self)

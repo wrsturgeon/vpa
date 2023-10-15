@@ -29,9 +29,15 @@ pub trait Execute<A: Ord, S: Ord> {
 
 /// Ran an automaton that tried to take a nonsensical action.
 /// TODO: Add fields to describe what went wrong.
-#[allow(clippy::exhaustive_structs)]
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct IllFormed;
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum IllFormed {
+    /// Gave up after a set limit. Feel free to try again with a more permissive limit.
+    TimedOut,
+    /// Parsing ambiguity.
+    /// TODO: Messages / data.
+    Ambiguity,
+}
 
 /// Execution of a visibly pushdown automaton on an input sequence.
 #[allow(clippy::exhaustive_structs)]
@@ -74,7 +80,7 @@ impl<A: Ord, S: Ord, E: Execute<A, S>, Iter: Iterator<Item = A>> Iterator
             self.ctrl = self.graph.step(
                 #[allow(unused_unsafe)] // the macro nests two `unsafe` blocks
                 {
-                    unwrap!(unwrap!(replace(&mut self.ctrl, Err(IllFormed))))
+                    unwrap!(unwrap!(replace(&mut self.ctrl, Err(IllFormed::Ambiguity))))
                 },
                 &mut self.stack,
                 maybe_token.as_ref(),

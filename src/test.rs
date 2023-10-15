@@ -71,8 +71,6 @@ mod prop {
 mod reduced {
     use super::*;
 
-    // Automaton { states: [State { transitions: CurryOpt { wildcard: None, none: None, some: {} }, accepting: false }], initial: {} }, []
-
     fn subset_construction<K: Copy + Ord, S: Copy + Ord>(nd: &Nondeterministic<K, S>, input: &[K]) {
         let Ok(d) = nd.determinize() else {
             return;
@@ -85,7 +83,7 @@ mod reduced {
 
     #[test]
     fn subset_construction_1() {
-        subset_construction::<bool, bool>(
+        subset_construction::<(), ()>(
             &Automaton {
                 states: vec![State {
                     transitions: CurryOpt {
@@ -103,7 +101,7 @@ mod reduced {
 
     #[test]
     fn subset_construction_2() {
-        subset_construction::<bool, bool>(
+        subset_construction::<bool, ()>(
             &Automaton {
                 states: vec![State {
                     transitions: CurryOpt {
@@ -119,6 +117,47 @@ mod reduced {
                 initial: once(0).collect(),
             },
             &[false],
+        );
+    }
+
+    #[test]
+    fn subset_construction_3() {
+        subset_construction(
+            &Automaton {
+                states: vec![State {
+                    transitions: CurryOpt {
+                        wildcard: None,
+                        none: Some(Curry {
+                            wildcard: None,
+                            specific: vec![(
+                                Range {
+                                    first: false,
+                                    last: false,
+                                },
+                                Return(Edge::Call {
+                                    dst: once(0).collect(),
+                                    call: call!(|x| x),
+                                    push: true,
+                                }),
+                            )],
+                        }),
+                        some: once((
+                            true,
+                            Curry {
+                                wildcard: Some(Return(Edge::Return {
+                                    dst: BTreeSet::new(),
+                                    call: call!(|x| x),
+                                })),
+                                specific: vec![],
+                            },
+                        ))
+                        .collect(),
+                    },
+                    accepting: false,
+                }],
+                initial: once(0).collect(),
+            },
+            &[false, false],
         );
     }
 }
