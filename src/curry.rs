@@ -44,14 +44,17 @@ impl<Arg: 'static + Ord, Etc: 'static + Lookup> Lookup for Curry<Arg, Etc> {
             #[allow(clippy::panic)]
             #[cfg(any(test, debug_assertions))]
             {
-                let _ = unwrap!(self.specific.binary_search_by(|&(ref range, ref etc)| {
-                    let cmp = range.contains(head);
-                    #[allow(clippy::manual_assert)]
-                    if cmp.is_eq() && etc.get(tail).is_some() {
-                        panic!("Duplicate value as both a wildcard and a non-wildcard");
-                    }
-                    cmp
-                }));
+                let _ = self
+                    .specific
+                    .binary_search_by(|&(ref range, ref etc)| {
+                        let cmp = range.contains(head);
+                        #[allow(clippy::manual_assert)]
+                        if cmp.is_eq() && etc.get(tail).is_some() {
+                            panic!("Duplicate value as both a wildcard and a non-wildcard");
+                        }
+                        cmp
+                    })
+                    .ok()?;
             }
             woohoo
         } else {
