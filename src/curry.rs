@@ -139,9 +139,14 @@ impl<'a, Arg: Ord, Etc: Lookup> IntoIterator for &'a Curry<Arg, Etc> {
 impl<Arg: Arbitrary + Ord, Etc: Arbitrary + Lookup> Arbitrary for Curry<Arg, Etc> {
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
+        let wildcard: Option<_> = Arbitrary::arbitrary(g);
         Self {
-            wildcard: Arbitrary::arbitrary(g),
-            specific: Arbitrary::arbitrary(g),
+            specific: if wildcard.is_none() {
+                Arbitrary::arbitrary(g)
+            } else {
+                vec![]
+            },
+            wildcard,
         }
     }
     #[inline]

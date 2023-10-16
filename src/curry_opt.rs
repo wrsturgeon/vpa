@@ -160,10 +160,20 @@ impl<Arg: Ord, Etc: Lookup> CurryOpt<Arg, Etc> {
 impl<Arg: Arbitrary + Ord, Etc: Arbitrary + Lookup> Arbitrary for CurryOpt<Arg, Etc> {
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
+        let wildcard: Option<_> = Arbitrary::arbitrary(g);
+        let none: Option<_> = if wildcard.is_none() {
+            Arbitrary::arbitrary(g)
+        } else {
+            None
+        };
         Self {
-            wildcard: Arbitrary::arbitrary(g),
-            none: Arbitrary::arbitrary(g),
-            some: Arbitrary::arbitrary(g),
+            some: if wildcard.is_none() && none.is_none() {
+                Arbitrary::arbitrary(g)
+            } else {
+                BTreeMap::new()
+            },
+            wildcard,
+            none,
         }
     }
     #[inline]

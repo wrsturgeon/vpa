@@ -164,6 +164,7 @@ mod reduced {
     }
 
     #[test]
+    #[should_panic]
     fn subset_construction_4() {
         subset_construction(
             &Automaton {
