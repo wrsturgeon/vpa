@@ -15,3 +15,6 @@ quickcheck = { version = "1.0.3", optional = true }
 [features]
 # default = ["quickcheck"]
 quickcheck = ["dep:quickcheck"]
+
+[dev-dependencies]
+tokio = { version = "1.33.0", features = ["macros", "rt", "time"] }

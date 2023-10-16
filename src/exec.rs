@@ -32,8 +32,6 @@ pub trait Execute<A: Ord, S: Ord> {
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum IllFormed {
-    /// Gave up after a set limit. Feel free to try again with a more permissive limit.
-    TimedOut,
     /// Parsing ambiguity.
     /// TODO: Messages / data.
     Ambiguity,
