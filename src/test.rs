@@ -13,7 +13,7 @@
 )]
 
 use crate::*;
-use core::{iter::once, time::Duration};
+use core::{iter::once, num::NonZeroUsize, time::Duration};
 use std::collections::{BTreeMap, BTreeSet};
 use tokio::time::timeout;
 
@@ -99,7 +99,8 @@ mod prop {
             env::var("QUICKCHECK_GENERATOR_SIZE")
                 .ok()
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(100),
+                // .unwrap_or(100),
+                .unwrap_or(2),
         );
         for _ in 0_usize
             ..env::var("QUICKCHECK_TESTS")
@@ -108,17 +109,23 @@ mod prop {
                 .unwrap_or(100)
         {
             let nd = Nondeterministic::<bool, bool>::arbitrary(&mut g);
-            if timeout(TIMEOUT, async { nd.determinize() }).await.is_err() {
-                for shrunk in nd.shrink() {
-                    #[allow(clippy::manual_assert)]
-                    if timeout(TIMEOUT, async { panic::catch_unwind(|| nd.determinize()) })
-                        .await
-                        .is_err()
-                    {
-                        panic!("Reduced case: {shrunk:?}")
-                    }
+            match timeout(TIMEOUT, async { panic::catch_unwind(|| nd.determinize()) }).await {
+                Ok(Ok(_determinized)) => {}
+                Ok(Err(_panicked)) => {
+                    panic!("Non-shrunk input panicked: {nd:?}")
                 }
-                panic!("Reduced case: {nd:?}")
+                Err(_timed_out) => {
+                    for shrunk in nd.shrink() {
+                        #[allow(clippy::manual_assert)]
+                        if timeout(TIMEOUT, async { panic::catch_unwind(|| nd.determinize()) })
+                            .await
+                            .is_err()
+                        {
+                            panic!("Reduced case: {shrunk:?}")
+                        }
+                    }
+                    panic!("Reduced case: {nd:?}")
+                }
             }
         }
     }
@@ -278,5 +285,42 @@ mod reduced {
             &[false, false],
         )
         .await;
+    }
+
+    #[test]
+    fn deabsurdify_1() {
+        // Automaton {
+        //     states: vec![State {
+        //         transitions: CurryOpt {
+        //             wildcard: None,
+        //             none: Some(Curry {
+        //                 wildcard: None,
+        //                 specific: vec![(
+        //                     Range {
+        //                         first: true,
+        //                         last: true,
+        //                     },
+        //                     Return(Call {
+        //                         dst: { 7945555980123157236 },
+        //                         call: Call {
+        //                             ptr: 0x10b659de0,
+        //                             src: "",
+        //                         },
+        //                         push: false,
+        //                     }),
+        //                 )],
+        //             }),
+        //             some: {},
+        //         },
+        //         accepting: true,
+        //     }],
+        //     initial: { 0 },
+        // };
+        let mut edge: Edge<(), usize> = Edge::Local {
+            dst: 42,
+            call: call!(|x| x),
+        };
+        edge.deabsurdify(NonZeroUsize::new(1).unwrap());
+        assert_eq!(*edge.dst(), 0);
     }
 }

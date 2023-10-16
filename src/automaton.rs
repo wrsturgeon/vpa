@@ -99,13 +99,12 @@ impl<A: Arbitrary + Ord, S: Arbitrary + Copy + Ord, Ctrl: 'static + Arbitrary + 
             if states.is_empty() {
                 continue;
             }
-            #[allow(unsafe_code)]
-            // SAFETY: Just checked above to be non-empty.
-            let size = unsafe { NonZeroUsize::new_unchecked(states.len()) };
-            let mut initial = Ctrl::arbitrary(g);
-            #[allow(clippy::arithmetic_side_effects)] // <-- false positive
-            initial.map(|i| *i = *i % size);
-            return Self { states, initial };
+            let mut wip = Self {
+                states,
+                initial: Ctrl::arbitrary(g),
+            };
+            wip.deabsurdify();
+            return wip;
         }
     }
     #[inline]
@@ -117,9 +116,9 @@ impl<A: Arbitrary + Ord, S: Arbitrary + Copy + Ord, Ctrl: 'static + Arbitrary + 
                 .shrink()
                 .filter(|&(ref states, _)| !states.is_empty())
                 .map(|(states, initial)| {
-                    let mut acc = Self { states, initial };
-                    acc.deabsurdify();
-                    acc
+                    let mut wip = Self { states, initial };
+                    wip.deabsurdify();
+                    wip
                 }),
         )
     }

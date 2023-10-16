@@ -1,6 +1,6 @@
 [env]
-MIRIFLAGS = "-Zmiri-backtrace=1"
-RUST_BACKTRACE = "1"
+MIRIFLAGS = "-Zmiri-backtrace=full"
+RUST_BACKTRACE = "full"
 
 [term]
 color = "always"
