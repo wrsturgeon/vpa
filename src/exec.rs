@@ -6,7 +6,7 @@
 
 //! Execution of a visibly pushdown automaton on an input sequence.
 
-use crate::{Curry, Edge, Indices, Return};
+use crate::{Curry, Edge, Indices, Range, Return};
 use core::{fmt, mem::replace};
 
 /// Any executable automaton.
@@ -33,8 +33,6 @@ pub trait Execute<A: Ord, S: Copy + Ord> {
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum IllFormed<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> {
-    /// Temporary value to be used with `core::mem::replace`.
-    Temporary,
     /// Two different `usize`s trying to merge into a single `usize`.
     IndexMergeConflict(usize, usize),
     /// Same key mapped to different outputs in two `BTreeMap`s being merged.
@@ -45,12 +43,14 @@ pub enum IllFormed<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S
     ),
     /// Merging two incompatible edges.
     EdgeMergeConflict(Edge<A, S, Ctrl>, Edge<A, S, Ctrl>),
+    /// Merging two curries into one in which a specific value is overwritten by a wildcard with a different output.
+    CurryOptMergeConflict(Option<S>, Option<Range<A>>),
+    /// Merging two curries into one in which a specific value is overwritten by a wildcard with a different output.
+    CurryMergeConflict(Edge<A, S, Ctrl>, Edge<A, S, Ctrl>),
     /// Merging two incompatible calls.
     CallMergeConflict(String, String),
     /// Merging two incompatible stack symbols.
     PushMergeConflict(S, S),
-    /// FIXME: phantom data.
-    Bullshit(A, Ctrl),
 }
 
 /// Execution of a visibly pushdown automaton on an input sequence.
@@ -69,7 +69,7 @@ pub struct Execution<
     pub iter: Iter,
     /// Current state in the automaton.
     #[allow(clippy::type_complexity)]
-    pub ctrl: Result<Result<E::Ctrl, bool>, IllFormed<A, S, E::Ctrl>>,
+    pub ctrl: Result<E::Ctrl, bool>,
     /// Current stack.
     pub stack: Vec<S>,
 }
@@ -102,21 +102,21 @@ impl<
 where
     E::Ctrl: fmt::Debug,
 {
-    type Item = A;
+    type Item = Result<A, IllFormed<A, S, E::Ctrl>>;
     #[inline]
     #[allow(clippy::unwrap_in_result)]
     fn next(&mut self) -> Option<Self::Item> {
         let maybe_token = self.iter.next();
-        if matches!(self.ctrl, Ok(Ok(_))) {
-            self.ctrl = self.graph.step(
-                #[allow(unused_unsafe)] // the macro nests two `unsafe` blocks
-                {
-                    unwrap!(unwrap!(replace(&mut self.ctrl, Err(IllFormed::Temporary))))
-                },
+        if self.ctrl.is_ok() {
+            self.ctrl = match self.graph.step(
+                unwrap!(replace(&mut self.ctrl, Err(false))),
                 &mut self.stack,
                 maybe_token.as_ref(),
-            );
+            ) {
+                Ok(ok) => ok,
+                Err(e) => return Some(Err(e)),
+            };
         }
-        maybe_token // <-- Propagate the iterator's input
+        maybe_token.map(Ok) // <-- Propagate the iterator's input
     }
 }

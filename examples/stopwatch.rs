@@ -29,7 +29,6 @@ fn main() {
             let mut clock = Instant::now();
             let nd = Nondeterministic::<bool, bool>::arbitrary(&mut g);
             println!("done in {:?}", clock.elapsed());
-            println!("{nd:?}");
             print!("Determinizing...");
             stdout().flush().expect("Couldn't flush stdout");
             clock = Instant::now();

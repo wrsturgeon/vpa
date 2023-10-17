@@ -9,10 +9,10 @@
 use crate::{
     merge, Curry, CurryOpt, Deterministic, Edge, IllFormed, Nondeterministic, Return, State,
 };
-use core::{borrow::Borrow, iter::once};
+use core::{borrow::Borrow, fmt, iter::once};
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
-impl<A: Ord, S: Copy + Ord> Deterministic<A, S> {
+impl<A: fmt::Debug + Ord, S: Copy + Ord> Deterministic<A, S> {
     /// Generalize a deterministic automaton to an identical but nominally nondeterministic automaton.
     #[inline]
     #[must_use]
@@ -34,7 +34,7 @@ impl<A: Ord, S: Copy + Ord> Deterministic<A, S> {
 /// Generalize a deterministic automaton to an identical but nominally nondeterministic automaton.
 #[inline]
 #[allow(clippy::type_complexity)]
-fn generalize_curry_opt<A: 'static + Ord, S: 'static + Copy + Ord>(
+fn generalize_curry_opt<A: 'static + fmt::Debug + Ord, S: 'static + Copy + Ord>(
     d: CurryOpt<S, Curry<A, Return<Edge<A, S, usize>>>>,
 ) -> CurryOpt<S, Curry<A, Return<Edge<A, S, BTreeSet<usize>>>>> {
     CurryOpt {
@@ -80,14 +80,14 @@ fn generalize_edge<A: Ord, S: Copy + Ord>(d: Edge<A, S, usize>) -> Edge<A, S, BT
             dst: once(dst).collect(),
             call,
         },
-        Edge::Phantom(_) => never!(),
+        Edge::Phantom(..) => never!(),
     }
 }
 
 /// Determinize a deterministic automaton to an identical but nominally nondeterministic automaton.
 #[inline]
 #[allow(clippy::type_complexity)]
-fn determinize_curry_opt<A: 'static + Ord, S: 'static + Copy + Ord>(
+fn determinize_curry_opt<A: 'static + fmt::Debug + Ord, S: 'static + Copy + Ord>(
     nd: CurryOpt<S, Curry<A, Return<Edge<A, S, BTreeSet<usize>>>>>,
     ordering: &[BTreeSet<usize>],
 ) -> CurryOpt<S, Curry<A, Return<Edge<A, S, usize>>>> {
@@ -140,11 +140,11 @@ fn determinize_edge<A: Ord, S: Copy + Ord>(
             dst: unwrap!(ordering.binary_search(&dst)),
             call,
         },
-        Edge::Phantom(_) => never!(),
+        Edge::Phantom(..) => never!(),
     }
 }
 
-impl<A: Ord, S: Copy + Ord> Nondeterministic<A, S> {
+impl<A: fmt::Debug + Ord, S: Copy + Ord> Nondeterministic<A, S> {
     /// Turn an iterator over indices into an iterator over references to states.
     #[inline]
     fn get_states<I: IntoIterator>(

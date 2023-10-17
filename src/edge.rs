@@ -7,7 +7,7 @@
 //! Edge in a visibly pushdown automaton (everything except the source state and the token that triggers it).
 
 use crate::{Call, IllFormed, Indices, Merge};
-use core::{fmt, marker::PhantomData};
+use core::{convert::Infallible, fmt, marker::PhantomData};
 
 #[cfg(any(test, feature = "quickcheck"))]
 use core::num::NonZeroUsize;
@@ -40,7 +40,7 @@ pub enum Edge<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>> {
         call: Call<(), ()>,
     },
     /// Bullshit uninhabited state to typecheck the `<A>` parameter.
-    Phantom(PhantomData<A>),
+    Phantom(Infallible, PhantomData<A>),
 }
 
 impl<A: Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices<A, S>> fmt::Debug
@@ -72,7 +72,7 @@ impl<A: Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices<A, S>> fmt::
                     dst.iter().collect::<Vec<_>>(),
                 )
             }
-            Self::Phantom(_) => never!(),
+            Self::Phantom(..) => never!(),
         }
     }
 }
@@ -140,7 +140,7 @@ impl<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Edge<A, S, Ctrl> {
             Self::Call { ref dst, .. }
             | Self::Return { ref dst, .. }
             | Self::Local { ref dst, .. } => dst,
-            Self::Phantom(_) => never!(),
+            Self::Phantom(..) => never!(),
         }
     }
 
@@ -151,7 +151,7 @@ impl<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Edge<A, S, Ctrl> {
             Self::Call { ref mut dst, .. }
             | Self::Return { ref mut dst, .. }
             | Self::Local { ref mut dst, .. } => dst,
-            Self::Phantom(_) => never!(),
+            Self::Phantom(..) => never!(),
         }
     }
     /// Take this edge in an actual execution. Return the index of the machine's state after this transition.
@@ -170,7 +170,7 @@ impl<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Edge<A, S, Ctrl> {
             }
             Self::Return { dst, call: _call } => stack.pop().map_or(Err(false), |_| Ok(dst)),
             Self::Local { dst, call: _call } => Ok(dst),
-            Self::Phantom(_) => never!(),
+            Self::Phantom(..) => never!(),
         }
     }
 

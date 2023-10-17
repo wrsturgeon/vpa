@@ -29,7 +29,7 @@ impl<A: fmt::Debug + Ord, Iter: Iterator<Item = A>> Run<A> for Iter {
         Execution {
             graph,
             iter: self,
-            ctrl: Ok(Ok(graph.initial())),
+            ctrl: Ok(graph.initial()),
             stack: vec![],
         }
     }

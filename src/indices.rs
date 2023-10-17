@@ -11,7 +11,7 @@ use core::iter::{once, Once};
 use std::collections::{btree_set::Iter, BTreeSet};
 
 /// Anything that can act as one or more state indices for an automaton.
-pub trait Indices<A: Ord, S: Copy + Ord>: 'static + Clone + Merge<A, S, Self> {
+pub trait Indices<A: Ord, S: Copy + Ord>: 'static + Clone + Merge<A, S, Self> + PartialEq {
     /// Iterator over references to elements without consuming the collection.
     type View<'a>: Iterator<Item = &'a usize>
     where

@@ -7,14 +7,14 @@
 //! Implementations of `quickcheck::Arbitrary`.
 
 use crate::*;
-use core::convert::identity;
+use core::{convert::identity, fmt};
 use quickcheck::{Arbitrary, Gen};
 use std::collections::BTreeMap;
 
 impl<
-        A: Arbitrary + Ord,
+        A: fmt::Debug + Arbitrary + Ord,
         S: Arbitrary + Copy + Ord,
-        Ctrl: 'static + Arbitrary + PartialEq + Indices<A, S>,
+        Ctrl: 'static + Arbitrary + Indices<A, S>,
     > Arbitrary for Automaton<A, S, Ctrl>
 {
     #[inline]
@@ -49,8 +49,11 @@ impl<
     }
 }
 
-impl<A: Arbitrary + Ord, S: Arbitrary + Copy + Ord, Ctrl: 'static + Arbitrary + Indices<A, S>>
-    Arbitrary for State<A, S, Ctrl>
+impl<
+        A: fmt::Debug + Arbitrary + Ord,
+        S: Arbitrary + Copy + Ord,
+        Ctrl: 'static + Arbitrary + Indices<A, S>,
+    > Arbitrary for State<A, S, Ctrl>
 {
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
@@ -171,7 +174,7 @@ impl<A: 'static + Clone + Ord, S: Arbitrary + Copy + Ord, Ctrl: Arbitrary + Indi
                     .shrink()
                     .map(|(dst, call, push)| Self::Call { dst, call, push }),
             ),
-            Self::Phantom(_) => never!(),
+            Self::Phantom(..) => never!(),
         }
     }
 }

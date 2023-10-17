@@ -21,15 +21,18 @@ pub type Nondeterministic<A, S> = Automaton<A, S, BTreeSet<usize>>;
 /// Visibly pushdown automaton containing all states.
 #[allow(clippy::exhaustive_structs)]
 #[derive(Clone, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Automaton<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> {
+pub struct Automaton<A: 'static + fmt::Debug + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> {
     /// Every state in the automaton.
     pub states: Vec<State<A, S, Ctrl>>,
     /// Index of the state of the machine before parsing any input.
     pub initial: Ctrl,
 }
 
-impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> Execute<A, S>
-    for Automaton<A, S, Ctrl>
+impl<
+        A: 'static + fmt::Debug + Clone + Ord,
+        S: 'static + fmt::Debug + Copy + Ord,
+        Ctrl: fmt::Debug + Indices<A, S>,
+    > Execute<A, S> for Automaton<A, S, Ctrl>
 {
     type Ctrl = Ctrl;
     #[inline]
@@ -49,10 +52,12 @@ impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> Exe
         };
         let maybe_stack_top = stack.last();
         let edges = states.filter_map(|s| s.transitions.get((maybe_stack_top, (token, ()))));
-        let Some(mega_edge) = merge(edges) else {
-            return Ok(Err(false));
+        let mega_edge: Edge<_, _, _> = match merge(edges) {
+            None => return Ok(Err(false)),
+            Some(Err(e)) => return Err(e),
+            Some(Ok(ok)) => ok,
         };
-        mega_edge.map(|edge: Edge<_, _, _>| edge.invoke(stack))
+        Ok(mega_edge.invoke(stack))
     }
 }
 
@@ -85,13 +90,16 @@ impl<A: fmt::Debug + Clone + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S
     {
         let mut run = i.into_iter().run(self);
         while run.next().is_some() {}
-        run.ctrl
-            .map(|r| if let Err(b) = r { b } else { unreachable!() })
+        if let Err(b) = run.ctrl {
+            Ok(b)
+        } else {
+            never!()
+        }
     }
 }
 
 #[cfg(any(test, feature = "quickcheck"))]
-impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S> + PartialEq> Automaton<A, S, Ctrl> {
+impl<A: fmt::Debug + Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Automaton<A, S, Ctrl> {
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
     #[allow(clippy::arithmetic_side_effects)]

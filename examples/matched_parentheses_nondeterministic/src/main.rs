@@ -105,7 +105,7 @@ pub fn main() {
         while run.next().is_some() {
             println!("    {run:?}");
         }
-        assert_eq!(run.ctrl, Ok(Err(true)));
+        assert_eq!(run.ctrl, Err(true));
     }
 
     // Reject all invalid strings
@@ -117,6 +117,6 @@ pub fn main() {
         while run.next().is_some() {
             println!("    {run:?}");
         }
-        assert_eq!(run.ctrl, Ok(Err(accept(s.chars()))));
+        assert_eq!(run.ctrl, Err(accept(s.chars())));
     }
 }

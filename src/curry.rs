@@ -6,7 +6,7 @@
 
 //! Map from a potential wildcard to _another map_.
 
-use crate::{Edge, Indices, Lookup, Merge, Range, Return};
+use crate::{Edge, IllFormed, Indices, Lookup, Merge, Range, Return};
 use core::{fmt, iter::*, option, slice::Iter};
 use std::vec::IntoIter;
 
@@ -45,7 +45,7 @@ impl<Arg: fmt::Debug + Ord, Etc: fmt::Debug + Lookup> fmt::Debug for Curry<Arg, 
     }
 }
 
-impl<Arg: 'static + Ord, Etc: 'static + Lookup> Lookup for Curry<Arg, Etc> {
+impl<Arg: 'static + fmt::Debug + Ord, Etc: 'static + Lookup> Lookup for Curry<Arg, Etc> {
     type Key<'k> = (&'k Arg, Etc::Key<'k>);
     type Value = Etc::Value;
     #[inline]
@@ -62,7 +62,9 @@ impl<Arg: 'static + Ord, Etc: 'static + Lookup> Lookup for Curry<Arg, Etc> {
                         let cmp = range.contains(head);
                         #[allow(clippy::manual_assert)]
                         if cmp.is_eq() && etc.get(tail).is_some() {
-                            panic!("Duplicate value as both a wildcard and a non-wildcard");
+                            panic!(
+                                "Duplicate value ({head:?}) as both a wildcard and a non-wildcard"
+                            );
                         }
                         cmp
                     })
@@ -93,11 +95,22 @@ impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> Mer
     for Curry<A, Return<Edge<A, S, Ctrl>>>
 {
     #[inline]
-    fn merge(self, other: &Self) -> Result<Self, crate::IllFormed<A, S, Ctrl>> {
-        Ok(Self {
-            wildcard: self.wildcard.merge(&other.wildcard)?,
-            specific: self.specific.merge(&other.specific)?,
-        })
+    fn merge(self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
+        let wildcard = self.wildcard.merge(&other.wildcard)?;
+        let specific = self.specific.merge(&other.specific)?;
+        if let Some(Return(wild)) = wildcard {
+            for (_, Return(edge)) in specific {
+                if wild != edge {
+                    return Err(IllFormed::CurryMergeConflict(wild, edge));
+                }
+            }
+            Ok(Self {
+                wildcard: Some(Return(wild)),
+                specific: vec![],
+            })
+        } else {
+            Ok(Self { wildcard, specific })
+        }
     }
 }
 
@@ -139,7 +152,7 @@ impl<Arg: Ord, Etc: Lookup> Curry<Arg, Etc> {
     }
 }
 
-impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S> + PartialEq>
+impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>>
     Curry<A, Return<Edge<A, S, Ctrl>>>
 {
     /// Find any value in common if any exist.

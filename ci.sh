@@ -19,10 +19,6 @@ cargo +nightly careful test --no-default-features \
 cargo +nightly careful test --no-default-features --examples \
 || cargo +nightly miri test --no-default-features --examples
 
-# Nix build status
-git add -A
-nix build
-
 # Property tests
 cargo test -r --all-features
 cargo test -r --all-features --examples
@@ -50,6 +46,10 @@ if [ -f run-examples.sh ]
 then
   ./run-examples.sh
 fi
+
+# Nix build status
+git add -A
+nix build
 
 # Check for remaining `FIXME`s
 grep -Rnw . --exclude-dir=target --exclude-dir=.git --exclude=ci.sh -e FIXME && exit 1 || : # next line checks result

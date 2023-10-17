@@ -35,6 +35,6 @@ quickcheck! {
         let chars = v.into_iter().map(char::from);
         let mut run = chars.clone().run(&parser);
         while run.next().is_some() {}
-        run.ctrl == Ok(Err(accept(chars)))
+        run.ctrl == Err(accept(chars))
     }
 }
