@@ -14,8 +14,10 @@ cargo clippy --all-targets --all-features
 
 # Non-property tests
 cargo install cargo-careful || :
-cargo +nightly careful test --no-default-features
-cargo +nightly careful test --no-default-features --examples
+cargo +nightly careful test --no-default-features \
+|| cargo +nightly miri test --no-default-features
+cargo +nightly careful test --no-default-features --examples \
+|| cargo +nightly miri test --no-default-features --examples
 
 # Nix build status
 git add -A
@@ -26,8 +28,10 @@ cargo test -r --all-features
 cargo test -r --all-features --examples
 
 # Extremely slow (but lovely) UB checks
-cargo +nightly careful test -r --no-default-features
-cargo +nightly careful test -r --no-default-features --examples
+cargo +nightly careful test -r --no-default-features \
+|| cargo +nightly miri test -r --no-default-features
+cargo +nightly careful test -r --no-default-features --examples \
+|| cargo +nightly miri test -r --no-default-features --examples
 cargo +nightly miri test --no-default-features
 cargo +nightly miri test --no-default-features --examples
 cargo +nightly miri test -r --no-default-features

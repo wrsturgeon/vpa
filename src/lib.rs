@@ -122,6 +122,25 @@ macro_rules! get {
     }};
 }
 
+/// Unreachable state, but checked if we're debugging.
+#[cfg(any(debug_assertions, test))]
+macro_rules! never {
+    () => {
+        unreachable!()
+    };
+}
+
+/// Unreachable state, but checked if we're debugging.
+#[cfg(not(any(debug_assertions, test)))]
+macro_rules! never {
+    () => {{
+        #[allow(unsafe_code)]
+        unsafe {
+            core::hint::unreachable_unchecked()
+        }
+    }};
+}
+
 /*
 /// Unwrap if we're debugging but `unwrap_unchecked` if we're not.
 #[cfg(any(debug_assertions, test))]

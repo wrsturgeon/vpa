@@ -6,7 +6,7 @@
 
 //! Visibly pushdown automata.
 
-use crate::{Execute, IllFormed, Indices, Lookup, Merge, State};
+use crate::{merge, Edge, Execute, IllFormed, Indices, Lookup, Run, State};
 use core::fmt;
 use std::collections::BTreeSet;
 
@@ -21,14 +21,14 @@ pub type Nondeterministic<A, S> = Automaton<A, S, BTreeSet<usize>>;
 /// Visibly pushdown automaton containing all states.
 #[allow(clippy::exhaustive_structs)]
 #[derive(Clone, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Automaton<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indices> {
+pub struct Automaton<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> {
     /// Every state in the automaton.
     pub states: Vec<State<A, S, Ctrl>>,
     /// Index of the state of the machine before parsing any input.
     pub initial: Ctrl,
 }
 
-impl<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: Indices> Execute<A, S>
+impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> Execute<A, S>
     for Automaton<A, S, Ctrl>
 {
     type Ctrl = Ctrl;
@@ -42,23 +42,21 @@ impl<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: Indices> Execute<A, S>
         ctrl: Self::Ctrl,
         stack: &mut Vec<S>,
         maybe_token: Option<&A>,
-    ) -> Result<Result<Self::Ctrl, bool>, IllFormed> {
+    ) -> Result<Result<Self::Ctrl, bool>, IllFormed<A, S, Ctrl>> {
         let mut states = ctrl.iter().map(|&i| get!(self.states, i));
         let Some(token) = maybe_token else {
             return Ok(Err(stack.is_empty() && states.any(|s| s.accepting)));
         };
         let maybe_stack_top = stack.last();
-        let mut edges = states.filter_map(|s| s.transitions.get((maybe_stack_top, (token, ()))));
-        let Some(first_edge) = edges.next() else {
+        let edges = states.filter_map(|s| s.transitions.get((maybe_stack_top, (token, ()))));
+        let Some(mega_edge) = merge(edges) else {
             return Ok(Err(false));
         };
-        let init = Ok(first_edge.clone());
-        let mega_edge = edges.fold(init, |r, e| r.and_then(|acc| acc.merge(e)))?;
-        Ok(mega_edge.invoke(stack))
+        mega_edge.map(|edge: Edge<_, _, _>| edge.invoke(stack))
     }
 }
 
-impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices> fmt::Debug
+impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices<A, S>> fmt::Debug
     for Automaton<A, S, Ctrl>
 {
     #[inline]
@@ -72,14 +70,19 @@ impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices
     }
 }
 
-impl<A: Ord, S: Copy + Ord, Ctrl: Indices> Automaton<A, S, Ctrl> {
+impl<A: fmt::Debug + Clone + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S>>
+    Automaton<A, S, Ctrl>
+{
     /// Run to completion and return whether or not the input was valid.
     /// # Errors
     /// If the parser itself is ill-formed and tries to take a nonsensical action.
     #[inline]
     #[allow(clippy::unreachable)]
-    pub fn accept<I: IntoIterator<Item = A>>(&self, i: I) -> Result<bool, IllFormed> {
-        use crate::Run;
+    pub fn accept<I: IntoIterator>(&self, i: I) -> Result<bool, IllFormed<A, S, Ctrl>>
+    where
+        Ctrl: fmt::Debug,
+        I::IntoIter: Run<A>,
+    {
         let mut run = i.into_iter().run(self);
         while run.next().is_some() {}
         run.ctrl
@@ -88,7 +91,7 @@ impl<A: Ord, S: Copy + Ord, Ctrl: Indices> Automaton<A, S, Ctrl> {
 }
 
 #[cfg(any(test, feature = "quickcheck"))]
-impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices + PartialEq> Automaton<A, S, Ctrl> {
+impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S> + PartialEq> Automaton<A, S, Ctrl> {
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
     #[allow(clippy::arithmetic_side_effects)]

@@ -7,7 +7,7 @@
 //! Edge in a visibly pushdown automaton (everything except the source state and the token that triggers it).
 
 use crate::{Call, IllFormed, Indices, Merge};
-use core::fmt;
+use core::{fmt, marker::PhantomData};
 
 #[cfg(any(test, feature = "quickcheck"))]
 use core::num::NonZeroUsize;
@@ -15,7 +15,7 @@ use core::num::NonZeroUsize;
 /// Edge in a visibly pushdown automaton (everything except the source state and the token that triggers it).
 #[allow(clippy::exhaustive_enums)]
 #[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum Edge<S: Copy + Ord, Ctrl: Indices> {
+pub enum Edge<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>> {
     /// Transition that causes a stack push.
     Call {
         /// Index of the machine's state after this transition.
@@ -39,9 +39,13 @@ pub enum Edge<S: Copy + Ord, Ctrl: Indices> {
         /// Function to call when compiled to a source file.
         call: Call<(), ()>,
     },
+    /// Bullshit uninhabited state to typecheck the `<A>` parameter.
+    Phantom(PhantomData<A>),
 }
 
-impl<S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices> fmt::Debug for Edge<S, Ctrl> {
+impl<A: Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices<A, S>> fmt::Debug
+    for Edge<A, S, Ctrl>
+{
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
@@ -51,30 +55,31 @@ impl<S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices> fmt::Debug for Edge
                 ref push,
             } => write!(
                 f,
-                "Edge::Call {{ dst: {:?}.into_iter().collect(), call: {call:?}, push: {push:?}, }}",
+                "Edge::Call {{ dst: {:?}.into_iter().collect(), call: {call:?}, push: {push:?} }}",
                 dst.iter().collect::<Vec<_>>(),
             ),
             Self::Return { ref dst, ref call } => {
                 write!(
                     f,
-                    "Edge::Return {{ dst: {:?}.into_iter().collect(), call: {call:?}, }}",
+                    "Edge::Return {{ dst: {:?}.into_iter().collect(), call: {call:?} }}",
                     dst.iter().collect::<Vec<_>>(),
                 )
             }
             Self::Local { ref dst, ref call } => {
                 write!(
                     f,
-                    "Edge::Local {{ dst: {:?}.into_iter().collect(), call: {call:?}, }}",
+                    "Edge::Local {{ dst: {:?}.into_iter().collect(), call: {call:?} }}",
                     dst.iter().collect::<Vec<_>>(),
                 )
             }
+            Self::Phantom(_) => never!(),
         }
     }
 }
 
-impl<S: Copy + Ord, Ctrl: Indices> Merge for Edge<S, Ctrl> {
+impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl> for Edge<A, S, Ctrl> {
     #[inline]
-    fn merge(self, other: &Self) -> Result<Self, IllFormed> {
+    fn merge(self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
         match (self, other) {
             (
                 Self::Call {
@@ -85,15 +90,15 @@ impl<S: Copy + Ord, Ctrl: Indices> Merge for Edge<S, Ctrl> {
                 &Self::Call {
                     dst: ref rdst,
                     call: ref rcall,
-                    push: ref rpush,
+                    push: rpush,
                 },
             ) => Ok(Self::Call {
                 dst: ldst.merge(rdst)?,
                 call: lcall.merge(rcall)?,
-                push: if lpush == *rpush {
+                push: if lpush == rpush {
                     lpush
                 } else {
-                    return Err(IllFormed::Ambiguity);
+                    return Err(IllFormed::PushMergeConflict(lpush, rpush));
                 },
             }),
             (
@@ -122,12 +127,12 @@ impl<S: Copy + Ord, Ctrl: Indices> Merge for Edge<S, Ctrl> {
                 dst: ldst.merge(rdst)?,
                 call: lcall.merge(rcall)?,
             }),
-            (_, _) => Err(IllFormed::Ambiguity),
+            (lhs, rhs) => Err(IllFormed::EdgeMergeConflict(lhs, rhs.clone())),
         }
     }
 }
 
-impl<S: Copy + Ord, Ctrl: Indices> Edge<S, Ctrl> {
+impl<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Edge<A, S, Ctrl> {
     /// Index of the machine's state after this transition.
     #[inline]
     pub const fn dst(&self) -> &Ctrl {
@@ -135,6 +140,7 @@ impl<S: Copy + Ord, Ctrl: Indices> Edge<S, Ctrl> {
             Self::Call { ref dst, .. }
             | Self::Return { ref dst, .. }
             | Self::Local { ref dst, .. } => dst,
+            Self::Phantom(_) => never!(),
         }
     }
 
@@ -145,6 +151,7 @@ impl<S: Copy + Ord, Ctrl: Indices> Edge<S, Ctrl> {
             Self::Call { ref mut dst, .. }
             | Self::Return { ref mut dst, .. }
             | Self::Local { ref mut dst, .. } => dst,
+            Self::Phantom(_) => never!(),
         }
     }
     /// Take this edge in an actual execution. Return the index of the machine's state after this transition.
@@ -163,6 +170,7 @@ impl<S: Copy + Ord, Ctrl: Indices> Edge<S, Ctrl> {
             }
             Self::Return { dst, call: _call } => stack.pop().map_or(Err(false), |_| Ok(dst)),
             Self::Local { dst, call: _call } => Ok(dst),
+            Self::Phantom(_) => never!(),
         }
     }
 

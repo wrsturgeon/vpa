@@ -6,7 +6,7 @@
 
 //! Trait to define fallible lookup.
 
-use crate::Merge;
+use crate::{Edge, Indices, Merge};
 use std::collections::BTreeMap;
 
 /// Trait to define fallible lookup.
@@ -55,9 +55,11 @@ impl<T: 'static> Lookup for Return<T> {
     }
 }
 
-impl<T: Merge> Merge for Return<T> {
+impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
+    for Return<Edge<A, S, Ctrl>>
+{
     #[inline(always)]
-    fn merge(self, other: &Self) -> Result<Self, crate::IllFormed> {
+    fn merge(self, other: &Self) -> Result<Self, crate::IllFormed<A, S, Ctrl>> {
         Ok(Self(self.0.merge(&other.0)?))
     }
 }

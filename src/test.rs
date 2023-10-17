@@ -7,7 +7,7 @@
 #![allow(clippy::panic, clippy::unwrap_used, clippy::use_debug)]
 
 use crate::*;
-use core::iter::once;
+use core::{fmt, iter::once};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg(feature = "quickcheck")]
@@ -22,14 +22,13 @@ const TIMEOUT: Duration = Duration::from_secs(1);
 #[cfg(feature = "quickcheck")]
 mod prop {
     use super::*;
-    use core::fmt;
     use quickcheck::{quickcheck, Arbitrary, Gen, TestResult};
     use std::{env, panic};
 
     const INPUTS_PER_AUTOMATON: usize = 100;
 
     #[inline]
-    fn subset_construction<K: Copy + fmt::Debug + Ord, S: Copy + Ord>(
+    fn subset_construction<K: Copy + fmt::Debug + Ord, S: fmt::Debug + Copy + Ord>(
         nd: &Nondeterministic<K, S>,
         input: &[K],
     ) -> TestResult {
@@ -182,7 +181,7 @@ mod prop {
     }
 
     #[inline]
-    fn check_subset_construction<A: Clone + Ord, S: Copy + Ord>(
+    fn check_subset_construction<A: fmt::Debug + Clone + Ord, S: fmt::Debug + Copy + Ord>(
         nd: &Nondeterministic<A, S>,
         d: &Deterministic<A, S>,
         input: &[A],
@@ -201,7 +200,10 @@ mod reduced {
     use super::*;
 
     #[inline]
-    fn subset_construction<K: Copy + Ord, S: Copy + Ord>(nd: &Nondeterministic<K, S>, input: &[K]) {
+    fn subset_construction<K: fmt::Debug + Copy + Ord, S: fmt::Debug + Copy + Ord>(
+        nd: &Nondeterministic<K, S>,
+        input: &[K],
+    ) {
         let Ok(d) = nd.determinize() else {
             return;
         };
@@ -430,7 +432,7 @@ mod reduced {
                     wildcard: Some(Curry {
                         wildcard: Some(Return(Edge::Local {
                             dst: once(1).collect(),
-                            call: call!(::core::convert::identity),
+                            call: call!(|x| x),
                         })),
                         specific: vec![],
                     }),

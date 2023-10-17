@@ -13,16 +13,16 @@ use core::fmt;
 use core::num::NonZeroUsize;
 
 /// A state in a visibly pushdown automaton.
-#[allow(clippy::exhaustive_structs)]
+#[allow(clippy::exhaustive_structs, clippy::type_complexity)]
 #[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct State<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indices> {
+pub struct State<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> {
     /// State transitions.
-    pub transitions: CurryOpt<S, Curry<A, Return<Edge<S, Ctrl>>>>,
+    pub transitions: CurryOpt<S, Curry<A, Return<Edge<A, S, Ctrl>>>>,
     /// Whether an automaton in this state should accept when input ends.
     pub accepting: bool,
 }
 
-impl<A: Ord, S: Copy + Ord, Ctrl: Indices> Default for State<A, S, Ctrl> {
+impl<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Default for State<A, S, Ctrl> {
     #[inline]
     #[allow(clippy::default_trait_access)]
     fn default() -> Self {
@@ -33,7 +33,7 @@ impl<A: Ord, S: Copy + Ord, Ctrl: Indices> Default for State<A, S, Ctrl> {
     }
 }
 
-impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices> fmt::Debug
+impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices<A, S>> fmt::Debug
     for State<A, S, Ctrl>
 {
     #[inline]
@@ -46,9 +46,9 @@ impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices
     }
 }
 
-impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices> Merge for State<A, S, Ctrl> {
+impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl> for State<A, S, Ctrl> {
     #[inline]
-    fn merge(self, other: &Self) -> Result<Self, crate::IllFormed> {
+    fn merge(self, other: &Self) -> Result<Self, crate::IllFormed<A, S, Ctrl>> {
         Ok(Self {
             transitions: self.transitions.merge(&other.transitions)?,
             accepting: self.accepting || other.accepting,
@@ -56,7 +56,7 @@ impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices> Merge for State<A, S, Ctrl> {
     }
 }
 
-impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices + PartialEq> State<A, S, Ctrl> {
+impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S> + PartialEq> State<A, S, Ctrl> {
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
     #[cfg(any(test, feature = "quickcheck"))]

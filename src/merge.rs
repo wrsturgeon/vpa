@@ -6,32 +6,34 @@
 
 //! Trait to fallibly combine multiple values into one value with identical semantics.
 
-use crate::IllFormed;
+use crate::{Curry, Edge, IllFormed, Indices, Range, Return};
 use core::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Trait to fallibly combine multiple values into one value with identical semantics.
-pub trait Merge: Sized {
+pub trait Merge<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>>: Sized {
     /// Fallibly combine multiple values into one value with identical semantics.
     /// # Errors
     /// Implementation-defined: if the merge as we define it can't work.
-    fn merge(self, other: &Self) -> Result<Self, IllFormed>;
+    fn merge(self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>>;
 }
 
-impl Merge for usize {
+impl<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl> for usize {
     #[inline]
-    fn merge(self, other: &Self) -> Result<Self, IllFormed> {
+    fn merge(self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
         if self == *other {
             Ok(self)
         } else {
-            Err(IllFormed::Ambiguity)
+            Err(IllFormed::IndexMergeConflict(self, *other))
         }
     }
 }
 
-impl<T: Clone + Merge> Merge for Option<T> {
+impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Clone + Indices<A, S>> Merge<A, S, Ctrl>
+    for Option<Return<Edge<A, S, Ctrl>>>
+{
     #[inline(always)]
-    fn merge(self, other: &Self) -> Result<Self, IllFormed> {
+    fn merge(self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
         Ok(match (self, other) {
             (None, &None) => None,
             (Some(a), &None) => Some(a),
@@ -41,28 +43,47 @@ impl<T: Clone + Merge> Merge for Option<T> {
     }
 }
 
-impl<T: Clone> Merge for Vec<T> {
+impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Clone + Indices<A, S>>
+    Merge<A, S, Ctrl> for Option<Curry<A, Return<Edge<A, S, Ctrl>>>>
+{
     #[inline(always)]
-    fn merge(mut self, other: &Self) -> Result<Self, IllFormed> {
+    fn merge(self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
+        Ok(match (self, other) {
+            (None, &None) => None,
+            (Some(a), &None) => Some(a),
+            (None, &Some(ref b)) => Some(b.clone()),
+            (Some(a), &Some(ref b)) => Some(a.merge(b)?),
+        })
+    }
+}
+
+// Vec<(range::Range<A>, lookup::Return<edge::Edge<A, S, Ctrl>>)>
+impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
+    for Vec<(Range<A>, Return<Edge<A, S, Ctrl>>)>
+{
+    #[inline(always)]
+    fn merge(mut self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
         self.extend(other.iter().cloned());
         Ok(self)
     }
 }
 
-impl<T: Clone + Ord> Merge for BTreeSet<T> {
+impl<A: Ord, S: Copy + Ord> Merge<A, S, BTreeSet<usize>> for BTreeSet<usize> {
     #[inline(always)]
-    fn merge(mut self, other: &Self) -> Result<Self, IllFormed> {
-        self.extend(other.iter().cloned());
+    fn merge(mut self, other: &Self) -> Result<Self, IllFormed<A, S, BTreeSet<usize>>> {
+        self.extend(other.iter().copied());
         Ok(self)
     }
 }
 
-impl<K: Clone + Ord, V: Clone> Merge for BTreeMap<K, V> {
+impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
+    for BTreeMap<S, Curry<A, Return<Edge<A, S, Ctrl>>>>
+{
     #[inline(always)]
-    fn merge(mut self, other: &Self) -> Result<Self, IllFormed> {
+    fn merge(mut self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
         for (k, v) in other {
-            if self.insert(k.clone(), v.clone()).is_some() {
-                return Err(IllFormed::Ambiguity);
+            if let Some(pre_v) = self.insert(*k, v.clone()) {
+                return Err(IllFormed::MapMergeConflict(*k, pre_v, v.clone()));
             }
         }
         Ok(self)
@@ -71,7 +92,15 @@ impl<K: Clone + Ord, V: Clone> Merge for BTreeMap<K, V> {
 
 /// Merge an entire iterator into a value.
 #[inline]
-pub fn merge<M: Clone + Merge, I: IntoIterator>(i: I) -> Option<Result<M, IllFormed>>
+pub fn merge<
+    A: Ord,
+    S: Copy + Ord,
+    Ctrl: Indices<A, S>,
+    M: Clone + Merge<A, S, Ctrl>,
+    I: IntoIterator,
+>(
+    i: I,
+) -> Option<Result<M, IllFormed<A, S, Ctrl>>>
 where
     I::Item: Borrow<M>,
 {

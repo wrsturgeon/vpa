@@ -35,8 +35,8 @@ impl<A: Ord, S: Copy + Ord> Deterministic<A, S> {
 #[inline]
 #[allow(clippy::type_complexity)]
 fn generalize_curry_opt<A: 'static + Ord, S: 'static + Copy + Ord>(
-    d: CurryOpt<S, Curry<A, Return<Edge<S, usize>>>>,
-) -> CurryOpt<S, Curry<A, Return<Edge<S, BTreeSet<usize>>>>> {
+    d: CurryOpt<S, Curry<A, Return<Edge<A, S, usize>>>>,
+) -> CurryOpt<S, Curry<A, Return<Edge<A, S, BTreeSet<usize>>>>> {
     CurryOpt {
         wildcard: d.wildcard.map(generalize_curry),
         none: d.none.map(generalize_curry),
@@ -50,9 +50,9 @@ fn generalize_curry_opt<A: 'static + Ord, S: 'static + Copy + Ord>(
 
 /// Generalize a deterministic automaton to an identical but nominally nondeterministic automaton.
 #[inline]
-fn generalize_curry<A: Ord, S: 'static + Copy + Ord>(
-    d: Curry<A, Return<Edge<S, usize>>>,
-) -> Curry<A, Return<Edge<S, BTreeSet<usize>>>> {
+fn generalize_curry<A: 'static + Ord, S: 'static + Copy + Ord>(
+    d: Curry<A, Return<Edge<A, S, usize>>>,
+) -> Curry<A, Return<Edge<A, S, BTreeSet<usize>>>> {
     Curry {
         wildcard: d.wildcard.map(|Return(x)| Return(generalize_edge(x))),
         specific: d
@@ -65,7 +65,7 @@ fn generalize_curry<A: Ord, S: 'static + Copy + Ord>(
 
 /// Generalize a deterministic automaton to an identical but nominally nondeterministic automaton.
 #[inline]
-fn generalize_edge<S: Copy + Ord>(d: Edge<S, usize>) -> Edge<S, BTreeSet<usize>> {
+fn generalize_edge<A: Ord, S: Copy + Ord>(d: Edge<A, S, usize>) -> Edge<A, S, BTreeSet<usize>> {
     match d {
         Edge::Call { dst, call, push } => Edge::Call {
             dst: once(dst).collect(),
@@ -80,6 +80,7 @@ fn generalize_edge<S: Copy + Ord>(d: Edge<S, usize>) -> Edge<S, BTreeSet<usize>>
             dst: once(dst).collect(),
             call,
         },
+        Edge::Phantom(_) => never!(),
     }
 }
 
@@ -87,9 +88,9 @@ fn generalize_edge<S: Copy + Ord>(d: Edge<S, usize>) -> Edge<S, BTreeSet<usize>>
 #[inline]
 #[allow(clippy::type_complexity)]
 fn determinize_curry_opt<A: 'static + Ord, S: 'static + Copy + Ord>(
-    nd: CurryOpt<S, Curry<A, Return<Edge<S, BTreeSet<usize>>>>>,
+    nd: CurryOpt<S, Curry<A, Return<Edge<A, S, BTreeSet<usize>>>>>,
     ordering: &[BTreeSet<usize>],
-) -> CurryOpt<S, Curry<A, Return<Edge<S, usize>>>> {
+) -> CurryOpt<S, Curry<A, Return<Edge<A, S, usize>>>> {
     CurryOpt {
         wildcard: nd.wildcard.map(|wild| determinize_curry(wild, ordering)),
         none: nd.none.map(|none| determinize_curry(none, ordering)),
@@ -103,10 +104,10 @@ fn determinize_curry_opt<A: 'static + Ord, S: 'static + Copy + Ord>(
 
 /// Determinize a deterministic automaton to an identical but nominally nondeterministic automaton.
 #[inline]
-fn determinize_curry<A: Ord, S: 'static + Copy + Ord>(
-    nd: Curry<A, Return<Edge<S, BTreeSet<usize>>>>,
+fn determinize_curry<A: 'static + Ord, S: 'static + Copy + Ord>(
+    nd: Curry<A, Return<Edge<A, S, BTreeSet<usize>>>>,
     ordering: &[BTreeSet<usize>],
-) -> Curry<A, Return<Edge<S, usize>>> {
+) -> Curry<A, Return<Edge<A, S, usize>>> {
     Curry {
         wildcard: nd
             .wildcard
@@ -121,10 +122,10 @@ fn determinize_curry<A: Ord, S: 'static + Copy + Ord>(
 
 /// Determinize a deterministic automaton to an identical but nominally nondeterministic automaton.
 #[inline]
-fn determinize_edge<S: Copy + Ord>(
-    nd: Edge<S, BTreeSet<usize>>,
+fn determinize_edge<A: Ord, S: Copy + Ord>(
+    nd: Edge<A, S, BTreeSet<usize>>,
     ordering: &[BTreeSet<usize>],
-) -> Edge<S, usize> {
+) -> Edge<A, S, usize> {
     match nd {
         Edge::Call { dst, call, push } => Edge::Call {
             dst: unwrap!(ordering.binary_search(&dst)),
@@ -139,6 +140,7 @@ fn determinize_edge<S: Copy + Ord>(
             dst: unwrap!(ordering.binary_search(&dst)),
             call,
         },
+        Edge::Phantom(_) => never!(),
     }
 }
 
@@ -160,7 +162,7 @@ impl<A: Ord, S: Copy + Ord> Nondeterministic<A, S> {
     /// If there's an ambiguity (which would have crashed the nondeterministic automaton anyway).
     #[inline]
     #[allow(clippy::missing_panics_doc, clippy::unwrap_in_result)]
-    pub fn determinize(&self) -> Result<Deterministic<A, S>, IllFormed>
+    pub fn determinize(&self) -> Result<Deterministic<A, S>, IllFormed<A, S, BTreeSet<usize>>>
     where
         A: Clone,
     {
@@ -197,7 +199,7 @@ impl<A: Ord, S: Copy + Ord> Nondeterministic<A, S> {
         &self,
         subsets_as_states: &mut BTreeMap<BTreeSet<usize>, State<A, S, BTreeSet<usize>>>,
         subset: BTreeSet<usize>,
-    ) -> Result<(), IllFormed>
+    ) -> Result<(), IllFormed<A, S, BTreeSet<usize>>>
     where
         A: Clone,
     {

@@ -89,9 +89,11 @@ impl<Arg: 'static + Ord, Etc: 'static + Lookup> Lookup for Curry<Arg, Etc> {
     }
 }
 
-impl<Arg: Clone + Ord, Etc: Clone + Lookup + Merge> Merge for Curry<Arg, Etc> {
+impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
+    for Curry<A, Return<Edge<A, S, Ctrl>>>
+{
     #[inline]
-    fn merge(self, other: &Self) -> Result<Self, crate::IllFormed> {
+    fn merge(self, other: &Self) -> Result<Self, crate::IllFormed<A, S, Ctrl>> {
         Ok(Self {
             wildcard: self.wildcard.merge(&other.wildcard)?,
             specific: self.specific.merge(&other.specific)?,
@@ -137,12 +139,12 @@ impl<Arg: Ord, Etc: Lookup> Curry<Arg, Etc> {
     }
 }
 
-impl<Arg: Clone + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indices + PartialEq>
-    Curry<Arg, Return<Edge<S, Ctrl>>>
+impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S> + PartialEq>
+    Curry<A, Return<Edge<A, S, Ctrl>>>
 {
     /// Find any value in common if any exist.
     #[inline]
-    pub fn disjoint(&self, other: &Self) -> Option<Option<Range<Arg>>> {
+    pub fn disjoint(&self, other: &Self) -> Option<Option<Range<A>>> {
         #[allow(clippy::else_if_without_else)]
         if let Some(Return(ref wild)) = self.wildcard {
             match other.wildcard {

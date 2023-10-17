@@ -7,13 +7,14 @@
 //! Implementations of `quickcheck::Arbitrary`.
 
 use crate::*;
+use core::convert::identity;
 use quickcheck::{Arbitrary, Gen};
 use std::collections::BTreeMap;
 
 impl<
         A: Arbitrary + Ord,
         S: Arbitrary + Copy + Ord,
-        Ctrl: 'static + Arbitrary + PartialEq + Indices,
+        Ctrl: 'static + Arbitrary + PartialEq + Indices<A, S>,
     > Arbitrary for Automaton<A, S, Ctrl>
 {
     #[inline]
@@ -48,8 +49,8 @@ impl<
     }
 }
 
-impl<A: Arbitrary + Ord, S: Arbitrary + Copy + Ord, Ctrl: 'static + Arbitrary + Indices> Arbitrary
-    for State<A, S, Ctrl>
+impl<A: Arbitrary + Ord, S: Arbitrary + Copy + Ord, Ctrl: 'static + Arbitrary + Indices<A, S>>
+    Arbitrary for State<A, S, Ctrl>
 {
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
@@ -125,7 +126,9 @@ impl<Arg: Arbitrary + Ord, Etc: Arbitrary + Lookup> Arbitrary for Curry<Arg, Etc
     }
 }
 
-impl<S: Arbitrary + Copy + Ord, Ctrl: Arbitrary + Indices> Arbitrary for Edge<S, Ctrl> {
+impl<A: 'static + Clone + Ord, S: Arbitrary + Copy + Ord, Ctrl: Arbitrary + Indices<A, S>> Arbitrary
+    for Edge<A, S, Ctrl>
+{
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
         let f: [fn(&mut Gen) -> Self; 3] = [
@@ -168,17 +171,23 @@ impl<S: Arbitrary + Copy + Ord, Ctrl: Arbitrary + Indices> Arbitrary for Edge<S,
                     .shrink()
                     .map(|(dst, call, push)| Self::Call { dst, call, push }),
             ),
+            Self::Phantom(_) => never!(),
         }
     }
 }
 
 impl Arbitrary for Call<(), ()> {
     #[inline]
-    #[allow(clippy::absolute_paths)]
-    fn arbitrary(_: &mut Gen) -> Self {
-        call!(::core::convert::identity)
+    fn arbitrary(g: &mut Gen) -> Self {
+        Self {
+            ptr: identity,
+            src: String::arbitrary(g),
+        }
     }
-    // No shrinking.
+    #[inline]
+    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+        Box::new(self.src.shrink().map(|src| Self { ptr: identity, src }))
+    }
 }
 
 impl<T: Arbitrary + Ord> Arbitrary for Range<T> {

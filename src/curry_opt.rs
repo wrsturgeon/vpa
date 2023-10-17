@@ -102,9 +102,11 @@ impl<Arg: 'static + Ord, Etc: 'static + Lookup> Lookup for CurryOpt<Arg, Etc> {
     }
 }
 
-impl<Arg: Clone + Ord, Etc: Clone + Lookup + Merge> Merge for CurryOpt<Arg, Etc> {
+impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
+    for CurryOpt<S, Curry<A, Return<Edge<A, S, Ctrl>>>>
+{
     #[inline]
-    fn merge(self, other: &Self) -> Result<Self, crate::IllFormed> {
+    fn merge(self, other: &Self) -> Result<Self, crate::IllFormed<A, S, Ctrl>> {
         Ok(Self {
             wildcard: self.wildcard.merge(&other.wildcard)?,
             none: self.none.merge(&other.none)?,
@@ -169,8 +171,8 @@ impl<Arg: Ord, Etc: Lookup> CurryOpt<Arg, Etc> {
     }
 }
 
-impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indices + PartialEq>
-    CurryOpt<S, Curry<A, Return<Edge<S, Ctrl>>>>
+impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S> + PartialEq>
+    CurryOpt<S, Curry<A, Return<Edge<A, S, Ctrl>>>>
 {
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
