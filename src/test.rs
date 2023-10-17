@@ -173,10 +173,10 @@ mod prop {
         d: &Deterministic<A, S>,
         input: &[A],
     ) -> bool {
-        let Some(lhs) = nd.accept(input.iter().cloned()) else {
+        let Ok(lhs) = nd.accept(input.iter().cloned()) else {
             return false;
         };
-        let Some(rhs) = d.accept(input.iter().cloned()) else {
+        let Ok(rhs) = d.accept(input.iter().cloned()) else {
             return false;
         };
         lhs == rhs
