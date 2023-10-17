@@ -11,10 +11,11 @@ build = "build.rs"
 
 # Optional dependencies:
 quickcheck = { version = "1.0.3", optional = true }
+tokio = { version = "1.33.0", optional = true, features = [
+  "macros",
+  "rt",
+  "time",
+] }
 
 [features]
-# default = ["quickcheck"]
-quickcheck = ["dep:quickcheck"]
-
-[dev-dependencies]
-tokio = { version = "1.33.0", features = ["macros", "rt", "time"] }
+quickcheck = ["dep:quickcheck", "dep:tokio"]

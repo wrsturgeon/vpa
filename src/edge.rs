@@ -8,11 +8,11 @@
 
 use crate::{Call, IllFormed, Indices, Merge};
 
-#[cfg(any(test, feature = "quickcheck"))]
-use core::num::NonZeroUsize;
-
 #[cfg(feature = "quickcheck")]
-use quickcheck::{Arbitrary, Gen};
+use {
+    core::num::NonZeroUsize,
+    quickcheck::{Arbitrary, Gen},
+};
 
 /// Edge in a visibly pushdown automaton (everything except the source state and the token that triggers it).
 #[allow(clippy::exhaustive_enums)]
@@ -139,7 +139,7 @@ impl<S: Copy + Ord, Ctrl: Indices> Edge<S, Ctrl> {
 
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
-    #[cfg(any(test, feature = "quickcheck"))]
+    #[cfg(feature = "quickcheck")]
     #[allow(clippy::arithmetic_side_effects)]
     pub(crate) fn deabsurdify(&mut self, size: NonZeroUsize) {
         self.dst_mut().map(|i| *i = *i % size);

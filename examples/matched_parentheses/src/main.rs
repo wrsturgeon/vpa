@@ -3,7 +3,7 @@ mod test;
 
 use core::iter::once;
 use rand::{thread_rng, RngCore};
-use vpa::{call, Automaton, Curry, CurryOpt, Deterministic, Edge, Return, Run, State};
+use vpa::{call, Automaton, Curry, CurryOpt, Deterministic, Edge, Range, Return, Run, State};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Symbol {
@@ -18,7 +18,7 @@ fn parser() -> Deterministic<char, Symbol> {
                 wildcard: Some(Curry {
                     wildcard: None,
                     specific: once((
-                        '(',
+                        Range::unit('('),
                         Return(Edge::Call {
                             call: call!(|x| x),
                             dst: 0,
@@ -33,7 +33,7 @@ fn parser() -> Deterministic<char, Symbol> {
                     Curry {
                         wildcard: None,
                         specific: once((
-                            ')',
+                            Range::unit(')'),
                             Return(Edge::Return {
                                 call: call!(|x| x),
                                 dst: 0,

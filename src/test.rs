@@ -4,49 +4,22 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-#![allow(
-    clippy::panic,
-    clippy::std_instead_of_core,
-    clippy::print_stdout,
-    clippy::unwrap_used,
-    clippy::use_debug
-)]
+#![allow(clippy::panic, clippy::unwrap_used, clippy::use_debug)]
 
 use crate::*;
-use core::{iter::once, num::NonZeroUsize, time::Duration};
+use core::iter::once;
 use std::collections::{BTreeMap, BTreeSet};
-use tokio::time::timeout;
-
-const TIMEOUT: Duration = Duration::from_secs(1);
 
 #[cfg(feature = "quickcheck")]
 mod prop {
     use super::*;
-    // use core::fmt;
+    use core::{fmt, time::Duration};
     use quickcheck::*;
     use std::{env, panic};
+    use tokio::time::timeout;
 
-    // TODO: re-enable
-
-    // #[inline]
-    // async fn timed_subset_construction<K: Copy + fmt::Debug + Ord + Sync, S: Copy + Ord + Sync>(
-    //     nd: &Nondeterministic<K, S>,
-    //     input: &[K],
-    // ) -> TestResult {
-    //     use std::time::Instant;
-    //     let mut start = Instant::now();
-    //     let Ok(d) = timeout(TIMEOUT, determinize(nd)).await.expect("Timed out") else {
-    //         return TestResult::discard();
-    //     };
-    //     println!("Determinized in {:?}", start.elapsed());
-    //     start = Instant::now();
-    //     if nd.accept(input.iter().copied()).unwrap() != d.accept(input.iter().copied()).unwrap() {
-    //         return TestResult::failed();
-    //     }
-    //     println!("Tested {:?} in {:?}", input, start.elapsed());
-    //     TestResult::passed()
-    //     // panic!("euthanasia")
-    // }
+    const INPUTS_PER_AUTOMATON: usize = 100;
+    const TIMEOUT: Duration = Duration::from_secs(1);
 
     // #[inline]
     // fn subset_construction<K: Copy + fmt::Debug + Ord, S: Copy + Ord>(
@@ -65,7 +38,6 @@ mod prop {
     //     }
     //     println!("Tested {:?} in {:?}", input, start.elapsed());
     //     TestResult::passed()
-    //     // panic!("euthanasia")
     // }
 
     quickcheck! {
@@ -74,33 +46,33 @@ mod prop {
             a.overlap(&b) == b.overlap(&a)
         }
 
-        // fn subset_construction_bool_bool(nd: Nondeterministic<bool, bool>, inputs: Vec<bool>) -> TestResult {
-        //     subset_construction(&nd, &inputs).await
+        // fn subset_construction_bool_bool(nd: Nondeterministic<bool, bool>, input: Vec<bool>) -> TestResult {
+        //     subset_construction(&nd, &input)
         // }
 
-        // fn subset_construction_bool_u8(nd: Nondeterministic<bool, u8>, inputs: Vec<bool>) -> TestResult {
-        //     subset_construction(&nd, &inputs)
+        // fn subset_construction_bool_u8(nd: Nondeterministic<bool, u8>, input: Vec<bool>) -> TestResult {
+        //     subset_construction(&nd, &input)
         // }
 
-        // fn subset_construction_u8_bool(nd: Nondeterministic<u8, bool>, inputs: Vec<u8>) -> TestResult {
-        //     subset_construction(&nd, &inputs)
+        // fn subset_construction_u8_bool(nd: Nondeterministic<u8, bool>, input: Vec<u8>) -> TestResult {
+        //     subset_construction(&nd, &input)
         // }
 
-        // fn subset_construction_u8_u8(nd: Nondeterministic<u8, u8>, inputs: Vec<u8>) -> TestResult {
-        //     subset_construction(&nd, &inputs)
+        // fn subset_construction_u8_u8(nd: Nondeterministic<u8, u8>, input: Vec<u8>) -> TestResult {
+        //     subset_construction(&nd, &input)
         // }
 
     }
 
     /// Has to be manual since `quickcheck!` doesn't understand `async`
     #[tokio::test]
-    async fn determinization_under_1s() {
+    #[allow(clippy::std_instead_of_core)]
+    async fn determinization_stopwatch() {
         let mut g = quickcheck::Gen::new(
             env::var("QUICKCHECK_GENERATOR_SIZE")
                 .ok()
                 .and_then(|s| s.parse().ok())
-                // .unwrap_or(100),
-                .unwrap_or(2),
+                .unwrap_or(100),
         );
         for _ in 0_usize
             ..env::var("QUICKCHECK_TESTS")
@@ -129,20 +101,84 @@ mod prop {
             }
         }
     }
+
+    /// Has to be manual since `quickcheck!` doesn't understand `async`
+    #[tokio::test]
+    #[allow(clippy::integer_division, clippy::std_instead_of_core)]
+    async fn subset_construction_bool_bool() {
+        let mut g = quickcheck::Gen::new(
+            env::var("QUICKCHECK_GENERATOR_SIZE")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(100),
+        );
+        for _ in 0_usize
+            ..(env::var("QUICKCHECK_TESTS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(100)
+                / INPUTS_PER_AUTOMATON)
+        {
+            'discard: loop {
+                let nd = Nondeterministic::<bool, bool>::arbitrary(&mut g);
+                let d = match timeout(TIMEOUT, async { nd.determinize() }).await {
+                    Err(_timed_out) => return shrink_subset_construction(nd, None).await,
+                    Ok(Err(_ill_formed)) => continue 'discard,
+                    Ok(Ok(ok)) => ok,
+                };
+                for _ in 0..INPUTS_PER_AUTOMATON {
+                    let input = Vec::arbitrary(&mut g);
+                    if !check_subset_construction(&nd, &d, &input) {
+                        return shrink_subset_construction(nd, Some(input)).await;
+                    }
+                }
+                break 'discard;
+            }
+        }
+    }
+
+    #[inline]
+    async fn shrink_subset_construction<
+        A: fmt::Debug + panic::RefUnwindSafe + Arbitrary + Clone + Ord + Send + Sync,
+        S: fmt::Debug + panic::RefUnwindSafe + Arbitrary + Copy + Ord + Send + Sync,
+    >(
+        orig_nd: Nondeterministic<A, S>,
+        orig_input: Option<Vec<A>>,
+    ) {
+        let shrunk: Vec<_> = (orig_nd.clone(), orig_input.clone()).shrink().collect(); // ouch, but necessary for async bounds
+        for (nd, maybe_input) in shrunk {
+            #[allow(clippy::match_wild_err_arm)]
+            let d = match timeout(TIMEOUT, async { nd.determinize() }).await {
+                Err(_timed_out) => panic!("Reduced case: ({nd:?}, {maybe_input:?})"),
+                Ok(Err(_ill_formed)) => continue,
+                Ok(Ok(ok)) => ok,
+            };
+            if let Some(input) = maybe_input {
+                #[allow(clippy::manual_assert)]
+                if !check_subset_construction(&nd, &d, &input) {
+                    panic!("Reduced case: ({nd:?}, {:?})", Some(input))
+                }
+            }
+        }
+        panic!("Reduced case: ({orig_nd:?}, {orig_input:?})")
+    }
+
+    #[inline]
+    fn check_subset_construction<A: Clone + Ord, S: Copy + Ord>(
+        nd: &Nondeterministic<A, S>,
+        d: &Deterministic<A, S>,
+        input: &[A],
+    ) -> bool {
+        nd.accept(input.iter().cloned()).unwrap() == d.accept(input.iter().cloned()).unwrap()
+    }
 }
 
 mod reduced {
     use super::*;
 
     #[inline]
-    async fn subset_construction<K: Copy + Ord + Sync, S: Copy + Ord + Sync>(
-        nd: &Nondeterministic<K, S>,
-        input: &[K],
-    ) {
-        let Ok(d) = timeout(TIMEOUT, async { nd.determinize() })
-            .await
-            .expect("Timed out")
-        else {
+    fn subset_construction<K: Copy + Ord, S: Copy + Ord>(nd: &Nondeterministic<K, S>, input: &[K]) {
+        let Ok(d) = nd.determinize() else {
             return;
         };
         assert_eq!(
@@ -151,8 +187,8 @@ mod reduced {
         );
     }
 
-    #[tokio::test]
-    async fn subset_construction_1() {
+    #[test]
+    fn subset_construction_1() {
         subset_construction::<(), ()>(
             &Automaton {
                 states: vec![State {
@@ -166,12 +202,11 @@ mod reduced {
                 initial: BTreeSet::new(),
             },
             &[],
-        )
-        .await;
+        );
     }
 
-    #[tokio::test]
-    async fn subset_construction_2() {
+    #[test]
+    fn subset_construction_2() {
         subset_construction::<bool, ()>(
             &Automaton {
                 states: vec![State {
@@ -188,12 +223,11 @@ mod reduced {
                 initial: once(0).collect(),
             },
             &[false],
-        )
-        .await;
+        );
     }
 
-    #[tokio::test]
-    async fn subset_construction_3() {
+    #[test]
+    fn subset_construction_3() {
         subset_construction(
             &Automaton {
                 states: vec![State {
@@ -230,13 +264,12 @@ mod reduced {
                 initial: once(0).collect(),
             },
             &[false, false],
-        )
-        .await;
+        );
     }
 
-    #[tokio::test]
+    #[test]
     #[should_panic]
-    async fn subset_construction_4() {
+    fn subset_construction_4() {
         subset_construction(
             &Automaton {
                 states: vec![State {
@@ -283,44 +316,6 @@ mod reduced {
                 initial: once(0).collect(),
             },
             &[false, false],
-        )
-        .await;
-    }
-
-    #[test]
-    fn deabsurdify_1() {
-        // Automaton {
-        //     states: vec![State {
-        //         transitions: CurryOpt {
-        //             wildcard: None,
-        //             none: Some(Curry {
-        //                 wildcard: None,
-        //                 specific: vec![(
-        //                     Range {
-        //                         first: true,
-        //                         last: true,
-        //                     },
-        //                     Return(Call {
-        //                         dst: { 7945555980123157236 },
-        //                         call: Call {
-        //                             ptr: 0x10b659de0,
-        //                             src: "",
-        //                         },
-        //                         push: false,
-        //                     }),
-        //                 )],
-        //             }),
-        //             some: {},
-        //         },
-        //         accepting: true,
-        //     }],
-        //     initial: { 0 },
-        // };
-        let mut edge: Edge<(), usize> = Edge::Local {
-            dst: 42,
-            call: call!(|x| x),
-        };
-        edge.deabsurdify(NonZeroUsize::new(1).unwrap());
-        assert_eq!(*edge.dst(), 0);
+        );
     }
 }

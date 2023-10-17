@@ -41,6 +41,17 @@ impl<T: Ord> Range<T> {
     }
 }
 
+impl<T: Clone + Ord> Range<T> {
+    /// Construct a range with only one element.
+    #[inline]
+    pub fn unit(first_and_last: T) -> Self {
+        Self {
+            first: first_and_last.clone(),
+            last: first_and_last,
+        }
+    }
+}
+
 /// Check if all ranges in a list are disjoint.
 #[inline]
 #[allow(dead_code)] // <-- TODO: Use somewhere!!!

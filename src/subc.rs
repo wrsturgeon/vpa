@@ -193,7 +193,6 @@ impl<A: Ord, S: Copy + Ord> Nondeterministic<A, S> {
     }
 
     /// Associate each subset of states with a merged state.
-    #[allow(clippy::todo)] // <-- FIXME
     fn explore(
         &self,
         subsets_as_states: &mut BTreeMap<BTreeSet<usize>, State<A, S, BTreeSet<usize>>>,
