@@ -10,7 +10,6 @@ use crate::{Curry, CurryOpt, Edge, Indices, Merge, Return};
 
 #[cfg(feature = "quickcheck")]
 use {
-    crate::Lookup,
     core::num::NonZeroUsize,
     quickcheck::{Arbitrary, Gen},
 };
@@ -46,12 +45,12 @@ impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices> Merge for State<A, S, Ctrl> {
     }
 }
 
-impl<A: Ord, S: Copy + Ord, Ctrl: Indices> State<A, S, Ctrl> {
+impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices + PartialEq> State<A, S, Ctrl> {
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
     #[cfg(feature = "quickcheck")]
     pub(crate) fn deabsurdify(&mut self, size: NonZeroUsize) {
-        self.transitions.map_values(|edge| edge.deabsurdify(size));
+        self.transitions.deabsurdify(size);
     }
 }
 

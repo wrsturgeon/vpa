@@ -42,6 +42,16 @@ impl<T: Ord> Range<T> {
 }
 
 impl<T: Clone + Ord> Range<T> {
+    /// Check if any value lies in both of these ranges simultaneously.
+    #[inline]
+    pub fn union(&self, other: &Self) -> Option<Self> {
+        let first = self.first.clone().max(other.first.clone());
+        let last = self.first.clone().min(other.first.clone());
+        (first <= last).then_some(Self { first, last })
+    }
+}
+
+impl<T: Clone + Ord> Range<T> {
     /// Construct a range with only one element.
     #[inline]
     pub fn unit(first_and_last: T) -> Self {

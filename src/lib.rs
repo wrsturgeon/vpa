@@ -182,6 +182,3 @@ pub use {
     run::Run,
     state::State,
 };
-
-#[cfg(feature = "quickcheck")]
-use tokio as _;

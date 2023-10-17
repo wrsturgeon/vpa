@@ -6,12 +6,15 @@
 
 //! Map from a potential wildcard to _another map_.
 
-use crate::{Lookup, Merge, Range};
+use crate::{Edge, Indices, Lookup, Merge, Range, Return};
 use core::{iter::*, option, slice::Iter};
 use std::vec::IntoIter;
 
 #[cfg(feature = "quickcheck")]
-use quickcheck::{Arbitrary, Gen};
+use {
+    core::num::NonZeroUsize,
+    quickcheck::{Arbitrary, Gen},
+};
 
 /// Map from a potential wildcard to _another map_.
 #[allow(clippy::exhaustive_structs)]
@@ -111,6 +114,85 @@ impl<Arg: Ord, Etc: Lookup> Curry<Arg, Etc> {
         self.wildcard
             .iter()
             .chain(self.specific.iter().map(|&(_, ref etc)| etc))
+    }
+
+    /// Remove a value by its key.
+    #[inline]
+    pub fn remove(&mut self, key: &Range<Arg>) {
+        drop(
+            self.specific
+                .iter()
+                .position(|&(ref k, _)| k == key)
+                .map(|i| self.specific.remove(i)),
+        );
+    }
+}
+
+impl<Arg: Clone + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indices + PartialEq>
+    Curry<Arg, Return<Edge<S, Ctrl>>>
+{
+    /// Find any value in common if any exist.
+    #[inline]
+    pub fn disjoint(&self, other: &Self) -> Option<Option<Range<Arg>>> {
+        #[allow(clippy::else_if_without_else)]
+        if let Some(Return(ref wild)) = self.wildcard {
+            match other.wildcard {
+                Some(Return(ref rhs_wild)) => {
+                    if wild == rhs_wild {
+                        return Some(None);
+                    }
+                }
+                None => {
+                    for &(ref k, Return(ref v)) in &self.specific {
+                        if wild == v {
+                            return Some(Some(k.clone()));
+                        }
+                    }
+                }
+            }
+        } else if let Some(Return(ref wild)) = other.wildcard {
+            for &(ref k, Return(ref v)) in &self.specific {
+                if wild == v {
+                    return Some(Some(k.clone()));
+                }
+            }
+        }
+        for &(ref k, _) in &self.specific {
+            if let Some(union) = other
+                .specific
+                .iter()
+                .fold(None, |acc, &(ref rk, _)| acc.or_else(|| rk.union(k)))
+            {
+                return Some(Some(union));
+            }
+        }
+        None
+    }
+
+    /// Eliminate absurd relations like transitions to non-existing states.
+    #[inline]
+    #[cfg(feature = "quickcheck")]
+    pub(crate) fn deabsurdify(&mut self, size: NonZeroUsize) {
+        if let Some(Return(ref edge)) = self.wildcard {
+            for i in self
+                .specific
+                .iter()
+                .enumerate()
+                .fold(vec![], |mut acc, (i, &(_, Return(ref v)))| {
+                    if edge == v {
+                        acc.push(i);
+                    }
+                    acc
+                })
+                .into_iter()
+                .rev()
+            {
+                drop(self.specific.remove(i));
+            }
+        }
+        for &mut (_, Return(ref mut etc)) in &mut self.specific {
+            etc.deabsurdify(size);
+        }
     }
 }
 

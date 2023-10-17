@@ -7,6 +7,7 @@
 //! Edge in a visibly pushdown automaton (everything except the source state and the token that triggers it).
 
 use crate::{Call, IllFormed, Indices, Merge};
+use core::fmt;
 
 #[cfg(feature = "quickcheck")]
 use {
@@ -16,7 +17,7 @@ use {
 
 /// Edge in a visibly pushdown automaton (everything except the source state and the token that triggers it).
 #[allow(clippy::exhaustive_enums)]
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Edge<S: Copy + Ord, Ctrl: Indices> {
     /// Transition that causes a stack push.
     Call {
@@ -41,6 +42,28 @@ pub enum Edge<S: Copy + Ord, Ctrl: Indices> {
         /// Function to call when compiled to a source file.
         call: Call<(), ()>,
     },
+}
+
+impl<S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices> fmt::Debug for Edge<S, Ctrl> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::Call {
+                ref dst,
+                ref call,
+                ref push,
+            } => write!(
+                f,
+                "Edge::Call {{ dst: {dst:?}, call: {call:?}, push: {push:?}, }}",
+            ),
+            Self::Return { ref dst, ref call } => {
+                write!(f, "Edge::Return {{ dst: {dst:?}, call: {call:?}, }}",)
+            }
+            Self::Local { ref dst, ref call } => {
+                write!(f, "Edge::Local {{ dst: {dst:?}, call: {call:?}, }}",)
+            }
+        }
+    }
 }
 
 impl<S: Copy + Ord, Ctrl: Indices> Merge for Edge<S, Ctrl> {

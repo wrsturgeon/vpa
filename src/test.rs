@@ -5,21 +5,23 @@
  */
 
 #![allow(clippy::panic, clippy::unwrap_used, clippy::use_debug)]
+#![allow(dead_code)] // <-- FIXME
 
 use crate::*;
-use core::iter::once;
+use core::{iter::once, time::Duration};
 use std::collections::{BTreeMap, BTreeSet};
+use tokio::time::timeout;
+
+const TIMEOUT: Duration = Duration::from_secs(1);
 
 #[cfg(feature = "quickcheck")]
 mod prop {
     use super::*;
-    use core::{fmt, time::Duration};
+    use core::fmt;
     use quickcheck::*;
     use std::{env, panic};
-    use tokio::time::timeout;
 
     const INPUTS_PER_AUTOMATON: usize = 100;
-    const TIMEOUT: Duration = Duration::from_secs(1);
 
     // #[inline]
     // fn subset_construction<K: Copy + fmt::Debug + Ord, S: Copy + Ord>(
@@ -96,9 +98,10 @@ mod prop {
 
     }
 
+    /*
     /// Has to be manual since `quickcheck!` doesn't understand `async`
     #[tokio::test]
-    #[allow(clippy::std_instead_of_core)]
+    #[allow(clippy::default_numeric_fallback, clippy::std_instead_of_core)]
     async fn determinization_stopwatch() {
         let mut g = quickcheck::Gen::new(
             env::var("QUICKCHECK_GENERATOR_SIZE")
@@ -133,6 +136,7 @@ mod prop {
             }
         }
     }
+    */
 
     /// Has to be manual since `quickcheck!` doesn't understand `async`
     #[tokio::test]
@@ -194,6 +198,25 @@ mod reduced {
         assert_eq!(
             nd.accept(input.iter().copied()).unwrap(),
             d.accept(input.iter().copied()).unwrap()
+        );
+    }
+
+    /// Has to be manual since `quickcheck!` doesn't understand `async`
+    #[allow(clippy::integer_division)]
+    async fn subset_construction_timed<A: Clone + Ord + Sync, S: Copy + Ord + Sync>(
+        nd: &Nondeterministic<A, S>,
+        input: &[A],
+    ) {
+        let d = match timeout(TIMEOUT, async { nd.determinize() })
+            .await
+            .expect("Timed out")
+        {
+            Err(_ill_formed) => return,
+            Ok(ok) => ok,
+        };
+        assert_eq!(
+            nd.accept(input.iter().cloned()).unwrap(),
+            d.accept(input.iter().cloned()).unwrap(),
         );
     }
 

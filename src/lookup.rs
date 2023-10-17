@@ -41,7 +41,7 @@ impl<K: 'static + Ord, V: 'static> Lookup for BTreeMap<K, V> {
     }
 }
 
-/// Trivial lookup to end currying: just return this value.
+/// Trivial lookup after currying: just return this value.
 #[allow(clippy::exhaustive_structs)]
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Return<T>(pub T);

@@ -7,6 +7,7 @@
 //! Visibly pushdown automata.
 
 use crate::{Execute, IllFormed, Indices, Lookup, Merge, State};
+use core::fmt;
 use std::collections::BTreeSet;
 
 #[cfg(feature = "quickcheck")]
@@ -22,7 +23,7 @@ pub type Nondeterministic<A, S> = Automaton<A, S, BTreeSet<usize>>;
 
 /// Visibly pushdown automaton containing all states.
 #[allow(clippy::exhaustive_structs)]
-#[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Automaton<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indices> {
     /// Every state in the automaton.
     pub states: Vec<State<A, S, Ctrl>>,
@@ -60,6 +61,19 @@ impl<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: Indices> Execute<A, S>
     }
 }
 
+impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices> fmt::Debug
+    for Automaton<A, S, Ctrl>
+{
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Automaton {{ states: vec!{:?}, initial: {:?} }}",
+            self.states, self.initial,
+        )
+    }
+}
+
 impl<A: Ord, S: Copy + Ord, Ctrl: Indices> Automaton<A, S, Ctrl> {
     /// Run to completion and return whether or not the input was valid.
     /// # Errors
@@ -73,10 +87,12 @@ impl<A: Ord, S: Copy + Ord, Ctrl: Indices> Automaton<A, S, Ctrl> {
         run.ctrl
             .map(|r| if let Err(b) = r { b } else { unreachable!() })
     }
+}
 
+#[cfg(feature = "quickcheck")]
+impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices + PartialEq> Automaton<A, S, Ctrl> {
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
-    #[cfg(feature = "quickcheck")]
     #[allow(clippy::arithmetic_side_effects)]
     pub(crate) fn deabsurdify(&mut self) {
         let size =
@@ -89,8 +105,11 @@ impl<A: Ord, S: Copy + Ord, Ctrl: Indices> Automaton<A, S, Ctrl> {
 }
 
 #[cfg(feature = "quickcheck")]
-impl<A: Arbitrary + Ord, S: Arbitrary + Copy + Ord, Ctrl: 'static + Arbitrary + Indices> Arbitrary
-    for Automaton<A, S, Ctrl>
+impl<
+        A: Arbitrary + Ord,
+        S: Arbitrary + Copy + Ord,
+        Ctrl: 'static + Arbitrary + PartialEq + Indices,
+    > Arbitrary for Automaton<A, S, Ctrl>
 {
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {

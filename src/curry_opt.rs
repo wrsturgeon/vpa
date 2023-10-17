@@ -11,7 +11,7 @@
 //! I don't want to impose a `Clone` bound on a type that never actually needs to be cloned
 //! just because an interpreter would be easier to write if it were `Clone`.
 
-use crate::{Lookup, Merge};
+use crate::{Curry, Edge, Indices, Lookup, Merge, Return};
 use core::{iter::*, option};
 use std::collections::{
     btree_map::{IntoIter, Iter},
@@ -19,7 +19,10 @@ use std::collections::{
 };
 
 #[cfg(feature = "quickcheck")]
-use quickcheck::{Arbitrary, Gen};
+use {
+    core::num::NonZeroUsize,
+    quickcheck::{Arbitrary, Gen},
+};
 
 /// Map from an optional top-of-stack symbol (optional b/c it might be empty) to _another map_ that matches input tokens.
 /// # Why is this necessary?
@@ -153,6 +156,48 @@ impl<Arg: Ord, Etc: Lookup> CurryOpt<Arg, Etc> {
             .iter()
             .chain(self.none.iter())
             .chain(self.some.values())
+    }
+}
+
+impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indices + PartialEq>
+    CurryOpt<S, Curry<A, Return<Edge<S, Ctrl>>>>
+{
+    /// Eliminate absurd relations like transitions to non-existing states.
+    #[inline]
+    #[allow(clippy::todo)] // <-- FIXME
+    #[allow(clippy::never_loop)]
+    #[cfg(feature = "quickcheck")]
+    pub(crate) fn deabsurdify(&mut self, size: NonZeroUsize) {
+        if let Some(ref mut wild) = self.wildcard {
+            'dont_delete_none: loop {
+                'delete_none: loop {
+                    if let Some(ref mut none) = self.none {
+                        while let Some(overlap) = wild.disjoint(none) {
+                            match overlap {
+                                Some(ref not_wild) => none.remove(not_wild),
+                                None => break 'delete_none,
+                            }
+                        }
+                        break 'dont_delete_none;
+                    }
+                }
+                self.none = None;
+                break 'dont_delete_none;
+            }
+        }
+        for etc in self.some.values_mut() {
+            etc.deabsurdify(size);
+            while let Some(overlap) = self
+                .wildcard
+                .as_ref()
+                .and_then(|wc| wc.disjoint(etc))
+                .or_else(|| self.none.as_ref().and_then(|none| none.disjoint(etc)))
+            {
+                overlap
+                    .as_ref()
+                    .map_or_else(|| todo!(), |overlapped| etc.remove(overlapped));
+            }
+        }
     }
 }
 
