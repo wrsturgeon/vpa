@@ -165,6 +165,9 @@ mod run;
 mod state;
 mod subc;
 
+#[cfg(feature = "quickcheck")]
+mod quickcheck_impl;
+
 #[cfg(test)]
 mod test;
 
@@ -182,3 +185,6 @@ pub use {
     run::Run,
     state::State,
 };
+
+#[cfg(all(test, not(feature = "quickcheck")))]
+use quickcheck as _;

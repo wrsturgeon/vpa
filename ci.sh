@@ -2,8 +2,6 @@
 
 set -eux
 
-export MIRIFLAGS=-Zmiri-backtrace=1
-
 # Update our workbench
 rustup update || :
 rustup toolchain install nightly || :
@@ -42,6 +40,7 @@ set -e
 if [ ! -z "$EXAMPLES" ]
 then
   echo $EXAMPLES | xargs -n 1 cargo +nightly miri run --example
+  echo $EXAMPLES | xargs -n 1 cargo +nightly careful run --all-features --example
 fi
 if [ -f run-examples.sh ]
 then

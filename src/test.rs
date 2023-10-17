@@ -5,37 +5,42 @@
  */
 
 #![allow(clippy::panic, clippy::unwrap_used, clippy::use_debug)]
-#![allow(dead_code)] // <-- FIXME
 
 use crate::*;
-use core::{iter::once, time::Duration};
+use core::iter::once;
 use std::collections::{BTreeMap, BTreeSet};
-use tokio::time::timeout;
 
+#[cfg(feature = "quickcheck")]
+use {core::time::Duration, tokio::time::timeout};
+
+#[cfg(not(feature = "quickcheck"))]
+use tokio as _;
+
+#[cfg(feature = "quickcheck")]
 const TIMEOUT: Duration = Duration::from_secs(1);
 
 #[cfg(feature = "quickcheck")]
 mod prop {
     use super::*;
     use core::fmt;
-    use quickcheck::*;
+    use quickcheck::{quickcheck, Arbitrary, Gen, TestResult};
     use std::{env, panic};
 
     const INPUTS_PER_AUTOMATON: usize = 100;
 
-    // #[inline]
-    // fn subset_construction<K: Copy + fmt::Debug + Ord, S: Copy + Ord>(
-    //     nd: &Nondeterministic<K, S>,
-    //     input: &[K],
-    // ) -> TestResult {
-    //     let Ok(d) = nd.determinize() else {
-    //         return TestResult::discard();
-    //     };
-    //     if nd.accept(input.iter().copied()).unwrap() != d.accept(input.iter().copied()).unwrap() {
-    //         return TestResult::failed();
-    //     }
-    //     TestResult::passed()
-    // }
+    #[inline]
+    fn subset_construction<K: Copy + fmt::Debug + Ord, S: Copy + Ord>(
+        nd: &Nondeterministic<K, S>,
+        input: &[K],
+    ) -> TestResult {
+        let Ok(d) = nd.determinize() else {
+            return TestResult::discard();
+        };
+        if nd.accept(input.iter().copied()).unwrap() != d.accept(input.iter().copied()).unwrap() {
+            return TestResult::failed();
+        }
+        TestResult::passed()
+    }
 
     /// Has to be manual since `quickcheck!` doesn't understand `async`
     #[allow(clippy::integer_division)]
@@ -43,7 +48,7 @@ mod prop {
         A: Arbitrary + fmt::Debug + Ord + panic::RefUnwindSafe + Send + Sync,
         S: Arbitrary + Copy + fmt::Debug + Ord + panic::RefUnwindSafe + Send + Sync,
     >() {
-        let mut g = quickcheck::Gen::new(
+        let mut g = Gen::new(
             env::var("QUICKCHECK_GENERATOR_SIZE")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -57,7 +62,11 @@ mod prop {
                 / INPUTS_PER_AUTOMATON)
         {
             'discard: loop {
-                let nd = Nondeterministic::<A, S>::arbitrary(&mut g);
+                let nd = timeout(TIMEOUT, async {
+                    Nondeterministic::<A, S>::arbitrary(&mut g)
+                })
+                .await
+                .expect("`Nondeterministic::arbitrary` timed out");
                 let d = match timeout(TIMEOUT, async { nd.determinize() }).await {
                     Err(_timed_out) => return shrink_subset_construction(nd, None).await,
                     Ok(Err(_ill_formed)) => continue 'discard,
@@ -75,35 +84,32 @@ mod prop {
     }
 
     quickcheck! {
-
         fn range_overlap_commutativity(a: Range<u8>, b: Range<u8>) -> bool {
             a.overlap(&b) == b.overlap(&a)
         }
 
-        // fn subset_construction_bool_bool(nd: Nondeterministic<bool, bool>, input: Vec<bool>) -> TestResult {
-        //     subset_construction(&nd, &input)
-        // }
+        fn subset_construction_bool_bool(nd: Nondeterministic<bool, bool>, input: Vec<bool>) -> TestResult {
+            subset_construction(&nd, &input)
+        }
 
-        // fn subset_construction_bool_u8(nd: Nondeterministic<bool, u8>, input: Vec<bool>) -> TestResult {
-        //     subset_construction(&nd, &input)
-        // }
+        fn subset_construction_bool_u8(nd: Nondeterministic<bool, u8>, input: Vec<bool>) -> TestResult {
+            subset_construction(&nd, &input)
+        }
 
-        // fn subset_construction_u8_bool(nd: Nondeterministic<u8, bool>, input: Vec<u8>) -> TestResult {
-        //     subset_construction(&nd, &input)
-        // }
+        fn subset_construction_u8_bool(nd: Nondeterministic<u8, bool>, input: Vec<u8>) -> TestResult {
+            subset_construction(&nd, &input)
+        }
 
-        // fn subset_construction_u8_u8(nd: Nondeterministic<u8, u8>, input: Vec<u8>) -> TestResult {
-        //     subset_construction(&nd, &input)
-        // }
-
+        fn subset_construction_u8_u8(nd: Nondeterministic<u8, u8>, input: Vec<u8>) -> TestResult {
+            subset_construction(&nd, &input)
+        }
     }
 
-    /*
     /// Has to be manual since `quickcheck!` doesn't understand `async`
     #[tokio::test]
     #[allow(clippy::default_numeric_fallback, clippy::std_instead_of_core)]
     async fn determinization_stopwatch() {
-        let mut g = quickcheck::Gen::new(
+        let mut g = Gen::new(
             env::var("QUICKCHECK_GENERATOR_SIZE")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -136,7 +142,6 @@ mod prop {
             }
         }
     }
-    */
 
     /// Has to be manual since `quickcheck!` doesn't understand `async`
     #[tokio::test]
@@ -153,7 +158,12 @@ mod prop {
         orig_nd: Nondeterministic<A, S>,
         orig_input: Option<Vec<A>>,
     ) {
-        let shrunk: Vec<_> = (orig_nd.clone(), orig_input.clone()).shrink().collect(); // ouch, but necessary for async bounds
+        let shrunk: Vec<_> = timeout(TIMEOUT, async {
+            (orig_nd.clone(), orig_input.clone()).shrink()
+        })
+        .await
+        .expect("Shrinking timed out; original argument was ({orig_nd:?}, {orig_input:?})")
+        .collect(); // ouch, but necessary for async bounds
         for (nd, maybe_input) in shrunk {
             #[allow(clippy::match_wild_err_arm)]
             let d = match timeout(TIMEOUT, async { nd.determinize() }).await {
@@ -201,6 +211,8 @@ mod reduced {
         );
     }
 
+    // TODO: enable if we get a reduced case!
+    /*
     /// Has to be manual since `quickcheck!` doesn't understand `async`
     #[allow(clippy::integer_division)]
     async fn subset_construction_timed<A: Clone + Ord + Sync, S: Copy + Ord + Sync>(
@@ -219,6 +231,7 @@ mod reduced {
             d.accept(input.iter().cloned()).unwrap(),
         );
     }
+    */
 
     #[test]
     fn subset_construction_1() {
@@ -350,5 +363,85 @@ mod reduced {
             },
             &[false, false],
         );
+    }
+
+    #[test]
+    #[allow(clippy::absolute_paths)]
+    fn subset_construction_5() {
+        subset_construction(
+            &Automaton {
+                states: vec![
+                    State {
+                        transitions: CurryOpt {
+                            wildcard: Some(Curry {
+                                wildcard: None,
+                                specific: once((
+                                    Range {
+                                        first: false,
+                                        last: false,
+                                    },
+                                    Return(Edge::Local {
+                                        dst: BTreeSet::new(),
+                                        call: call!(::core::convert::identity),
+                                    }),
+                                ))
+                                .collect(),
+                            }),
+                            none: None,
+                            some: BTreeMap::new(),
+                        },
+                        accepting: false,
+                    },
+                    State {
+                        transitions: CurryOpt {
+                            wildcard: Some(Curry {
+                                wildcard: None,
+                                specific: once((
+                                    Range {
+                                        first: false,
+                                        last: false,
+                                    },
+                                    Return(Edge::Call {
+                                        dst: [0, 1].into_iter().collect(),
+                                        call: call!(::core::convert::identity),
+                                        push: false,
+                                    }),
+                                ))
+                                .collect(),
+                            }),
+                            none: None,
+                            some: BTreeMap::new(),
+                        },
+                        accepting: false,
+                    },
+                ],
+                initial: once(1).collect(),
+            },
+            &[false, false],
+        );
+    }
+
+    #[test]
+    #[allow(clippy::absolute_paths)]
+    fn deabsurdify_1() {
+        let mut na = Nondeterministic::<(), ()> {
+            states: vec![State {
+                transitions: CurryOpt {
+                    wildcard: Some(Curry {
+                        wildcard: Some(Return(Edge::Local {
+                            dst: once(1).collect(),
+                            call: call!(::core::convert::identity),
+                        })),
+                        specific: vec![],
+                    }),
+                    none: None,
+                    some: BTreeMap::new(),
+                },
+                accepting: false,
+            }],
+            initial: once(0).collect(),
+        };
+        na.deabsurdify();
+        drop(na.determinize());
     }
 }

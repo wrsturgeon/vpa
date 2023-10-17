@@ -10,11 +10,8 @@ use crate::{Execute, IllFormed, Indices, Lookup, Merge, State};
 use core::fmt;
 use std::collections::BTreeSet;
 
-#[cfg(feature = "quickcheck")]
-use {
-    core::num::NonZeroUsize,
-    quickcheck::{Arbitrary, Gen},
-};
+#[cfg(any(test, feature = "quickcheck"))]
+use core::num::NonZeroUsize;
 
 /// Deterministic visibly pushdown automaton: each token causes exactly one transition.
 pub type Deterministic<A, S> = Automaton<A, S, usize>;
@@ -68,8 +65,9 @@ impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Automaton {{ states: vec!{:?}, initial: {:?} }}",
-            self.states, self.initial,
+            "Automaton {{ states: vec!{:?}, initial: {:?}.into_iter().collect() }}",
+            self.states,
+            self.initial.iter().collect::<Vec<_>>(),
         )
     }
 }
@@ -89,7 +87,7 @@ impl<A: Ord, S: Copy + Ord, Ctrl: Indices> Automaton<A, S, Ctrl> {
     }
 }
 
-#[cfg(feature = "quickcheck")]
+#[cfg(any(test, feature = "quickcheck"))]
 impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices + PartialEq> Automaton<A, S, Ctrl> {
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
@@ -97,48 +95,9 @@ impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices + PartialEq> Automaton<A, S, C
     pub(crate) fn deabsurdify(&mut self) {
         let size =
             NonZeroUsize::new(self.states.len()).expect("Zero-state automaton: can't do anything");
+        self.initial.map(|i| *i = *i % size);
         for state in &mut self.states {
             state.deabsurdify(size);
         }
-        self.initial.map(|i| *i = *i % size);
-    }
-}
-
-#[cfg(feature = "quickcheck")]
-impl<
-        A: Arbitrary + Ord,
-        S: Arbitrary + Copy + Ord,
-        Ctrl: 'static + Arbitrary + PartialEq + Indices,
-    > Arbitrary for Automaton<A, S, Ctrl>
-{
-    #[inline]
-    fn arbitrary(g: &mut Gen) -> Self {
-        loop {
-            let states = Vec::arbitrary(g);
-            if states.is_empty() {
-                continue;
-            }
-            let mut wip = Self {
-                states,
-                initial: Ctrl::arbitrary(g),
-            };
-            wip.deabsurdify();
-            return wip;
-        }
-    }
-    #[inline]
-    #[allow(unsafe_code)]
-    #[allow(clippy::arithmetic_side_effects)]
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        Box::new(
-            (self.states.clone(), self.initial.clone())
-                .shrink()
-                .filter(|&(ref states, _)| !states.is_empty())
-                .map(|(states, initial)| {
-                    let mut wip = Self { states, initial };
-                    wip.deabsurdify();
-                    wip
-                }),
-        )
     }
 }

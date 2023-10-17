@@ -8,9 +8,6 @@
 
 use core::cmp::Ordering;
 
-#[cfg(feature = "quickcheck")]
-use quickcheck::{Arbitrary, Gen};
-
 /// Range of values that, unlike `core::ops::Range...`, implements `Ord`.
 #[allow(clippy::exhaustive_structs)]
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -72,31 +69,4 @@ fn disjoint<T: Ord>(array: &[Range<T>]) -> bool {
             .iter()
             .all(|b| !a.overlap(b))
     })
-}
-
-#[cfg(feature = "quickcheck")]
-impl<T: Arbitrary + Ord> Arbitrary for Range<T> {
-    #[inline]
-    fn arbitrary(g: &mut Gen) -> Self {
-        let (a, b) = <(T, T)>::arbitrary(g);
-        if a < b {
-            Self { first: a, last: b }
-        } else {
-            Self { first: b, last: a }
-        }
-    }
-    #[inline]
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        Box::new(
-            (self.first.clone(), self.last.clone())
-                .shrink()
-                .map(|(a, b)| {
-                    if a < b {
-                        Self { first: a, last: b }
-                    } else {
-                        Self { first: b, last: a }
-                    }
-                }),
-        )
-    }
 }

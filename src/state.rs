@@ -7,16 +7,14 @@
 //! A state in a visibly pushdown automaton.
 
 use crate::{Curry, CurryOpt, Edge, Indices, Merge, Return};
+use core::fmt;
 
-#[cfg(feature = "quickcheck")]
-use {
-    core::num::NonZeroUsize,
-    quickcheck::{Arbitrary, Gen},
-};
+#[cfg(any(test, feature = "quickcheck"))]
+use core::num::NonZeroUsize;
 
 /// A state in a visibly pushdown automaton.
 #[allow(clippy::exhaustive_structs)]
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct State<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indices> {
     /// State transitions.
     pub transitions: CurryOpt<S, Curry<A, Return<Edge<S, Ctrl>>>>,
@@ -35,6 +33,19 @@ impl<A: Ord, S: Copy + Ord, Ctrl: Indices> Default for State<A, S, Ctrl> {
     }
 }
 
+impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices> fmt::Debug
+    for State<A, S, Ctrl>
+{
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "State {{ transitions: {:?}, accepting: {:?}, }}",
+            self.transitions, self.accepting,
+        )
+    }
+}
+
 impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices> Merge for State<A, S, Ctrl> {
     #[inline]
     fn merge(self, other: &Self) -> Result<Self, crate::IllFormed> {
@@ -48,30 +59,8 @@ impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices> Merge for State<A, S, Ctrl> {
 impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices + PartialEq> State<A, S, Ctrl> {
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
-    #[cfg(feature = "quickcheck")]
+    #[cfg(any(test, feature = "quickcheck"))]
     pub(crate) fn deabsurdify(&mut self, size: NonZeroUsize) {
         self.transitions.deabsurdify(size);
-    }
-}
-
-#[cfg(feature = "quickcheck")]
-impl<A: Arbitrary + Ord, S: Arbitrary + Copy + Ord, Ctrl: 'static + Arbitrary + Indices> Arbitrary
-    for State<A, S, Ctrl>
-{
-    #[inline]
-    fn arbitrary(g: &mut Gen) -> Self {
-        Self {
-            transitions: Arbitrary::arbitrary(g),
-            accepting: Arbitrary::arbitrary(g),
-        }
-    }
-    #[inline]
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        Box::new((self.transitions.clone(), self.accepting).shrink().map(
-            |(transitions, accepting)| Self {
-                transitions,
-                accepting,
-            },
-        ))
     }
 }

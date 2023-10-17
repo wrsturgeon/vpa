@@ -1,5 +1,6 @@
 [env]
 MIRIFLAGS = "-Zmiri-backtrace=full"
+QUICKCHECK_GENERATOR_SIZE = "32"
 RUST_BACKTRACE = "full"
 
 [term]

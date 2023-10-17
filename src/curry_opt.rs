@@ -12,17 +12,14 @@
 //! just because an interpreter would be easier to write if it were `Clone`.
 
 use crate::{Curry, Edge, Indices, Lookup, Merge, Return};
-use core::{iter::*, option};
+use core::{fmt, iter::*, option};
 use std::collections::{
     btree_map::{IntoIter, Iter},
     BTreeMap,
 };
 
-#[cfg(feature = "quickcheck")]
-use {
-    core::num::NonZeroUsize,
-    quickcheck::{Arbitrary, Gen},
-};
+#[cfg(any(test, feature = "quickcheck"))]
+use core::num::NonZeroUsize;
 
 /// Map from an optional top-of-stack symbol (optional b/c it might be empty) to _another map_ that matches input tokens.
 /// # Why is this necessary?
@@ -31,7 +28,7 @@ use {
 /// I don't want to impose a `Clone` bound on a type that never actually needs to be cloned
 /// just because an interpreter would be easier to write if it were `Clone`.
 #[allow(clippy::exhaustive_structs)]
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct CurryOpt<Arg: Ord, Etc: Lookup> {
     /// First, try to match this, no matter what the argument was.
     pub wildcard: Option<Etc>,
@@ -49,6 +46,19 @@ impl<Arg: Ord, Etc: Lookup> Default for CurryOpt<Arg, Etc> {
             none: None,
             some: BTreeMap::new(),
         }
+    }
+}
+
+impl<Arg: fmt::Debug + Ord, Etc: fmt::Debug + Lookup> fmt::Debug for CurryOpt<Arg, Etc> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "CurryOpt {{ wildcard: {:?}, none: {:?}, some: {:?}.into_iter().collect() }}",
+            self.wildcard,
+            self.none,
+            self.some.iter().collect::<Vec<_>>(),
+        )
     }
 }
 
@@ -164,11 +174,14 @@ impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indices 
 {
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
-    #[allow(clippy::todo)] // <-- FIXME
     #[allow(clippy::never_loop)]
-    #[cfg(feature = "quickcheck")]
+    #[cfg(any(test, feature = "quickcheck"))]
     pub(crate) fn deabsurdify(&mut self, size: NonZeroUsize) {
+        if let Some(ref mut none) = self.none {
+            none.deabsurdify(size);
+        }
         if let Some(ref mut wild) = self.wildcard {
+            wild.deabsurdify(size);
             'dont_delete_none: loop {
                 'delete_none: loop {
                     if let Some(ref mut none) = self.none {
@@ -178,8 +191,8 @@ impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indices 
                                 None => break 'delete_none,
                             }
                         }
-                        break 'dont_delete_none;
                     }
+                    break 'dont_delete_none;
                 }
                 self.none = None;
                 break 'dont_delete_none;
@@ -193,44 +206,12 @@ impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indices 
                 .and_then(|wc| wc.disjoint(etc))
                 .or_else(|| self.none.as_ref().and_then(|none| none.disjoint(etc)))
             {
-                overlap
-                    .as_ref()
-                    .map_or_else(|| todo!(), |overlapped| etc.remove(overlapped));
+                etc.remove(
+                    overlap
+                        .as_ref()
+                        .expect("Internal error: please open an issue on GitHub!"),
+                );
             }
         }
-    }
-}
-
-#[cfg(feature = "quickcheck")]
-impl<Arg: Arbitrary + Ord, Etc: Arbitrary + Lookup> Arbitrary for CurryOpt<Arg, Etc> {
-    #[inline]
-    fn arbitrary(g: &mut Gen) -> Self {
-        let wildcard: Option<_> = Arbitrary::arbitrary(g);
-        let none: Option<_> = if wildcard.is_none() {
-            Arbitrary::arbitrary(g)
-        } else {
-            None
-        };
-        Self {
-            some: if wildcard.is_none() && none.is_none() {
-                Arbitrary::arbitrary(g)
-            } else {
-                BTreeMap::new()
-            },
-            wildcard,
-            none,
-        }
-    }
-    #[inline]
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        Box::new(
-            (self.wildcard.clone(), self.none.clone(), self.some.clone())
-                .shrink()
-                .map(|(wildcard, none, some)| Self {
-                    wildcard,
-                    none,
-                    some,
-                }),
-        )
     }
 }

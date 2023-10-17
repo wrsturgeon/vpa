@@ -7,18 +7,15 @@
 //! Map from a potential wildcard to _another map_.
 
 use crate::{Edge, Indices, Lookup, Merge, Range, Return};
-use core::{iter::*, option, slice::Iter};
+use core::{fmt, iter::*, option, slice::Iter};
 use std::vec::IntoIter;
 
-#[cfg(feature = "quickcheck")]
-use {
-    core::num::NonZeroUsize,
-    quickcheck::{Arbitrary, Gen},
-};
+#[cfg(any(test, feature = "quickcheck"))]
+use core::num::NonZeroUsize;
 
 /// Map from a potential wildcard to _another map_.
 #[allow(clippy::exhaustive_structs)]
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Curry<Arg: Ord, Etc: Lookup> {
     /// First, try to match this, no matter what the argument was.
     pub wildcard: Option<Etc>,
@@ -33,6 +30,18 @@ impl<Arg: Ord, Etc: Lookup> Default for Curry<Arg, Etc> {
             wildcard: None,
             specific: vec![],
         }
+    }
+}
+
+impl<Arg: fmt::Debug + Ord, Etc: fmt::Debug + Lookup> fmt::Debug for Curry<Arg, Etc> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Curry {{ wildcard: {:?}, specific: {:?}.into_iter().collect() }}",
+            self.wildcard,
+            self.specific.iter().collect::<Vec<_>>(),
+        )
     }
 }
 
@@ -171,9 +180,10 @@ impl<Arg: Clone + Ord, S: 'static + Copy + Ord, Ctrl: 'static + Indices + Partia
 
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
-    #[cfg(feature = "quickcheck")]
+    #[cfg(any(test, feature = "quickcheck"))]
     pub(crate) fn deabsurdify(&mut self, size: NonZeroUsize) {
-        if let Some(Return(ref edge)) = self.wildcard {
+        if let Some(Return(ref mut edge)) = self.wildcard {
+            edge.deabsurdify(size);
             for i in self
                 .specific
                 .iter()
@@ -213,30 +223,6 @@ impl<'a, Arg: Ord, Etc: Lookup> IntoIterator for &'a Curry<Arg, Etc> {
             self.specific
                 .iter()
                 .map((|&(ref k, ref v)| (Some(k), v)) as _),
-        )
-    }
-}
-
-#[cfg(feature = "quickcheck")]
-impl<Arg: Arbitrary + Ord, Etc: Arbitrary + Lookup> Arbitrary for Curry<Arg, Etc> {
-    #[inline]
-    fn arbitrary(g: &mut Gen) -> Self {
-        let wildcard: Option<_> = Arbitrary::arbitrary(g);
-        Self {
-            specific: if wildcard.is_none() {
-                Arbitrary::arbitrary(g)
-            } else {
-                vec![]
-            },
-            wildcard,
-        }
-    }
-    #[inline]
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        Box::new(
-            (self.wildcard.clone(), self.specific.clone())
-                .shrink()
-                .map(|(wildcard, specific)| Self { wildcard, specific }),
         )
     }
 }

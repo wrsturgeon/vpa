@@ -9,11 +9,8 @@
 use crate::{Call, IllFormed, Indices, Merge};
 use core::fmt;
 
-#[cfg(feature = "quickcheck")]
-use {
-    core::num::NonZeroUsize,
-    quickcheck::{Arbitrary, Gen},
-};
+#[cfg(any(test, feature = "quickcheck"))]
+use core::num::NonZeroUsize;
 
 /// Edge in a visibly pushdown automaton (everything except the source state and the token that triggers it).
 #[allow(clippy::exhaustive_enums)]
@@ -54,13 +51,22 @@ impl<S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices> fmt::Debug for Edge
                 ref push,
             } => write!(
                 f,
-                "Edge::Call {{ dst: {dst:?}, call: {call:?}, push: {push:?}, }}",
+                "Edge::Call {{ dst: {:?}.into_iter().collect(), call: {call:?}, push: {push:?}, }}",
+                dst.iter().collect::<Vec<_>>(),
             ),
             Self::Return { ref dst, ref call } => {
-                write!(f, "Edge::Return {{ dst: {dst:?}, call: {call:?}, }}",)
+                write!(
+                    f,
+                    "Edge::Return {{ dst: {:?}.into_iter().collect(), call: {call:?}, }}",
+                    dst.iter().collect::<Vec<_>>(),
+                )
             }
             Self::Local { ref dst, ref call } => {
-                write!(f, "Edge::Local {{ dst: {dst:?}, call: {call:?}, }}",)
+                write!(
+                    f,
+                    "Edge::Local {{ dst: {:?}.into_iter().collect(), call: {call:?}, }}",
+                    dst.iter().collect::<Vec<_>>(),
+                )
             }
         }
     }
@@ -162,57 +168,9 @@ impl<S: Copy + Ord, Ctrl: Indices> Edge<S, Ctrl> {
 
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
-    #[cfg(feature = "quickcheck")]
+    #[cfg(any(test, feature = "quickcheck"))]
     #[allow(clippy::arithmetic_side_effects)]
     pub(crate) fn deabsurdify(&mut self, size: NonZeroUsize) {
         self.dst_mut().map(|i| *i = *i % size);
-    }
-}
-
-#[cfg(feature = "quickcheck")]
-impl<S: Arbitrary + Copy + Ord, Ctrl: Arbitrary + Indices> Arbitrary for Edge<S, Ctrl> {
-    #[inline]
-    fn arbitrary(g: &mut Gen) -> Self {
-        let f: [fn(&mut Gen) -> Self; 3] = [
-            |r| Self::Call {
-                dst: Arbitrary::arbitrary(r),
-                call: Arbitrary::arbitrary(r),
-                push: S::arbitrary(r),
-            },
-            |r| Self::Return {
-                dst: Arbitrary::arbitrary(r),
-                call: Arbitrary::arbitrary(r),
-            },
-            |r| Self::Local {
-                dst: Arbitrary::arbitrary(r),
-                call: Arbitrary::arbitrary(r),
-            },
-        ];
-        unwrap!(g.choose(&f))(g)
-    }
-    #[inline]
-    #[allow(clippy::shadow_unrelated)]
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        match *self {
-            Self::Local { ref dst, ref call } => Box::new(
-                (dst.clone(), call.clone())
-                    .shrink()
-                    .map(|(dst, call)| Self::Local { dst, call }),
-            ),
-            Self::Return { ref dst, ref call } => Box::new(
-                (dst.clone(), call.clone())
-                    .shrink()
-                    .map(|(dst, call)| Self::Return { dst, call }),
-            ),
-            Self::Call {
-                ref dst,
-                ref call,
-                push,
-            } => Box::new(
-                (dst.clone(), call.clone(), push)
-                    .shrink()
-                    .map(|(dst, call, push)| Self::Call { dst, call, push }),
-            ),
-        }
     }
 }

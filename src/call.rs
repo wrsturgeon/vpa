@@ -9,12 +9,6 @@
 use crate::{IllFormed, Merge};
 use core::{cmp, fmt};
 
-#[cfg(feature = "quickcheck")]
-use {
-    core::convert::identity,
-    quickcheck::{Arbitrary, Gen},
-};
-
 /// Both a function pointer and a source-code representation.
 #[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Clone, Hash)]
@@ -74,16 +68,4 @@ impl<I, O> Call<I, O> {
     pub const fn new(ptr: fn(I) -> O, src: String) -> Self {
         Self { ptr, src }
     }
-}
-
-#[cfg(feature = "quickcheck")]
-impl Arbitrary for Call<(), ()> {
-    #[inline]
-    fn arbitrary(_: &mut Gen) -> Self {
-        Self {
-            ptr: identity,
-            src: "::core::convert::identity".to_owned(),
-        }
-    }
-    // No shrinking.
 }

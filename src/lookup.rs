@@ -6,12 +6,8 @@
 
 //! Trait to define fallible lookup.
 
-use std::collections::BTreeMap;
-
-#[cfg(feature = "quickcheck")]
-use quickcheck::{Arbitrary, Gen};
-
 use crate::Merge;
+use std::collections::BTreeMap;
 
 /// Trait to define fallible lookup.
 pub trait Lookup {
@@ -63,17 +59,5 @@ impl<T: Merge> Merge for Return<T> {
     #[inline(always)]
     fn merge(self, other: &Self) -> Result<Self, crate::IllFormed> {
         Ok(Self(self.0.merge(&other.0)?))
-    }
-}
-
-#[cfg(feature = "quickcheck")]
-impl<T: Arbitrary> Arbitrary for Return<T> {
-    #[inline]
-    fn arbitrary(g: &mut Gen) -> Self {
-        Self(Arbitrary::arbitrary(g))
-    }
-    #[inline]
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        Box::new(self.0.shrink().map(Self))
     }
 }
