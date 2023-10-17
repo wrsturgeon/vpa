@@ -26,19 +26,51 @@ mod prop {
     //     nd: &Nondeterministic<K, S>,
     //     input: &[K],
     // ) -> TestResult {
-    //     use std::time::Instant;
-    //     let mut start = Instant::now();
     //     let Ok(d) = nd.determinize() else {
     //         return TestResult::discard();
     //     };
-    //     println!("Determinized in {:?}", start.elapsed());
-    //     start = Instant::now();
     //     if nd.accept(input.iter().copied()).unwrap() != d.accept(input.iter().copied()).unwrap() {
     //         return TestResult::failed();
     //     }
-    //     println!("Tested {:?} in {:?}", input, start.elapsed());
     //     TestResult::passed()
     // }
+
+    /// Has to be manual since `quickcheck!` doesn't understand `async`
+    #[allow(clippy::integer_division)]
+    async fn subset_construction_timed<
+        A: Arbitrary + fmt::Debug + Ord + panic::RefUnwindSafe + Send + Sync,
+        S: Arbitrary + Copy + fmt::Debug + Ord + panic::RefUnwindSafe + Send + Sync,
+    >() {
+        let mut g = quickcheck::Gen::new(
+            env::var("QUICKCHECK_GENERATOR_SIZE")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(100),
+        );
+        for _ in 0_usize
+            ..(env::var("QUICKCHECK_TESTS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(100)
+                / INPUTS_PER_AUTOMATON)
+        {
+            'discard: loop {
+                let nd = Nondeterministic::<A, S>::arbitrary(&mut g);
+                let d = match timeout(TIMEOUT, async { nd.determinize() }).await {
+                    Err(_timed_out) => return shrink_subset_construction(nd, None).await,
+                    Ok(Err(_ill_formed)) => continue 'discard,
+                    Ok(Ok(ok)) => ok,
+                };
+                for _ in 0..INPUTS_PER_AUTOMATON {
+                    let input = Vec::arbitrary(&mut g);
+                    if !check_subset_construction(&nd, &d, &input) {
+                        return shrink_subset_construction(nd, Some(input)).await;
+                    }
+                }
+                break 'discard;
+            }
+        }
+    }
 
     quickcheck! {
 
@@ -105,36 +137,8 @@ mod prop {
     /// Has to be manual since `quickcheck!` doesn't understand `async`
     #[tokio::test]
     #[allow(clippy::integer_division, clippy::std_instead_of_core)]
-    async fn subset_construction_bool_bool() {
-        let mut g = quickcheck::Gen::new(
-            env::var("QUICKCHECK_GENERATOR_SIZE")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(100),
-        );
-        for _ in 0_usize
-            ..(env::var("QUICKCHECK_TESTS")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(100)
-                / INPUTS_PER_AUTOMATON)
-        {
-            'discard: loop {
-                let nd = Nondeterministic::<bool, bool>::arbitrary(&mut g);
-                let d = match timeout(TIMEOUT, async { nd.determinize() }).await {
-                    Err(_timed_out) => return shrink_subset_construction(nd, None).await,
-                    Ok(Err(_ill_formed)) => continue 'discard,
-                    Ok(Ok(ok)) => ok,
-                };
-                for _ in 0..INPUTS_PER_AUTOMATON {
-                    let input = Vec::arbitrary(&mut g);
-                    if !check_subset_construction(&nd, &d, &input) {
-                        return shrink_subset_construction(nd, Some(input)).await;
-                    }
-                }
-                break 'discard;
-            }
-        }
+    async fn subset_construction_timed_bool_bool() {
+        subset_construction_timed::<bool, bool>().await;
     }
 
     #[inline]
@@ -169,7 +173,13 @@ mod prop {
         d: &Deterministic<A, S>,
         input: &[A],
     ) -> bool {
-        nd.accept(input.iter().cloned()).unwrap() == d.accept(input.iter().cloned()).unwrap()
+        let Some(lhs) = nd.accept(input.iter().cloned()) else {
+            return false;
+        };
+        let Some(rhs) = d.accept(input.iter().cloned()) else {
+            return false;
+        };
+        lhs == rhs
     }
 }
 
