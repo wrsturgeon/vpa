@@ -8,7 +8,7 @@ on:
 
 env:
   RUST_BACKTRACE: full
-  QUICKCHECK_TESTS: 10000
+  QUICKCHECK_TESTS: 100000
 
 jobs:
   build:
