@@ -7,11 +7,8 @@
 //! Visibly pushdown automata.
 
 use crate::{merge, Edge, Execute, IllFormed, Indices, Lookup, Run, State};
-use core::fmt;
+use core::{fmt, num::NonZeroUsize};
 use std::collections::BTreeSet;
-
-#[cfg(any(test, feature = "quickcheck"))]
-use core::num::NonZeroUsize;
 
 /// Deterministic visibly pushdown automaton: each token causes exactly one transition.
 pub type Deterministic<A, S> = Automaton<A, S, usize>;
@@ -20,12 +17,36 @@ pub type Nondeterministic<A, S> = Automaton<A, S, BTreeSet<usize>>;
 
 /// Visibly pushdown automaton containing all states.
 #[allow(clippy::exhaustive_structs)]
-#[derive(Clone, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Automaton<A: 'static + fmt::Debug + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> {
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Automaton<
+    A: 'static + fmt::Debug + Ord,
+    S: 'static + fmt::Debug + Copy + Ord,
+    Ctrl: Indices<A, S>,
+> {
     /// Every state in the automaton.
     pub states: Vec<State<A, S, Ctrl>>,
     /// Index of the state of the machine before parsing any input.
     pub initial: Ctrl,
+}
+
+impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord> Default for Automaton<A, S, usize> {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            states: vec![State::default()],
+            initial: 0,
+        }
+    }
+}
+
+impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord> Default for Automaton<A, S, BTreeSet<usize>> {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            states: vec![],
+            initial: BTreeSet::new(),
+        }
+    }
 }
 
 impl<
@@ -52,7 +73,7 @@ impl<
         };
         let maybe_stack_top = stack.last();
         let edges = states.filter_map(|s| s.transitions.get((maybe_stack_top, (token, ()))));
-        let mega_edge: Edge<_, _, _> = match merge(edges) {
+        let mega_edge: Edge<A, S, Ctrl> = match merge(edges) {
             None => return Ok(Err(false)),
             Some(Err(e)) => return Err(e),
             Some(Ok(ok)) => ok,
@@ -89,26 +110,63 @@ impl<A: fmt::Debug + Clone + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S
         I::IntoIter: Run<A>,
     {
         let mut run = i.into_iter().run(self);
-        while run.next().is_some() {}
+        for r in &mut run {
+            drop(r?);
+        }
         if let Err(b) = run.ctrl {
             Ok(b)
         } else {
             never!()
         }
     }
+
+    /// Check for structural errors.
+    /// # Errors
+    /// If this automaton is not well-formed.
+    #[inline]
+    pub fn check(&self) -> Result<(), IllFormed<A, S, Ctrl>> {
+        let size = self.states.len();
+        if self.initial.iter().any(|&i| i >= size) {
+            return Err(IllFormed::OutOfBounds);
+        }
+        if let Some(nz) = NonZeroUsize::new(size) {
+            for state in &self.states {
+                state.check(nz)?;
+            }
+        }
+        Ok(())
+    }
 }
 
-#[cfg(any(test, feature = "quickcheck"))]
-impl<A: fmt::Debug + Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Automaton<A, S, Ctrl> {
+impl<A: fmt::Debug + Clone + Ord, S: fmt::Debug + Copy + Ord> Automaton<A, S, BTreeSet<usize>> {
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
     #[allow(clippy::arithmetic_side_effects)]
-    pub(crate) fn deabsurdify(&mut self) {
-        let size =
-            NonZeroUsize::new(self.states.len()).expect("Zero-state automaton: can't do anything");
-        self.initial.map(|i| *i = *i % size);
+    pub fn deabsurdify(&mut self) -> bool {
+        if let Some(size) = NonZeroUsize::new(self.states.len()) {
+            Indices::<A, S>::map(&mut self.initial, |i| *i = *i % size);
+            for state in &mut self.states {
+                state.deabsurdify(size);
+            }
+        } else {
+            self.initial = BTreeSet::new();
+        };
+        true
+    }
+}
+
+impl<A: fmt::Debug + Clone + Ord, S: fmt::Debug + Copy + Ord> Automaton<A, S, usize> {
+    /// Eliminate absurd relations like transitions to non-existing states.
+    #[inline]
+    #[allow(clippy::arithmetic_side_effects)]
+    pub fn deabsurdify(&mut self) -> bool {
+        let Some(size) = NonZeroUsize::new(self.states.len()) else {
+            return false;
+        };
+        Indices::<A, S>::map(&mut self.initial, |i| *i = *i % size);
         for state in &mut self.states {
             state.deabsurdify(size);
         }
+        true
     }
 }

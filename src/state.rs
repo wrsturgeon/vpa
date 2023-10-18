@@ -6,23 +6,26 @@
 
 //! A state in a visibly pushdown automaton.
 
-use crate::{Curry, CurryOpt, Edge, Indices, Merge, Return};
-use core::fmt;
-
-#[cfg(any(test, feature = "quickcheck"))]
-use core::num::NonZeroUsize;
+use crate::{CurryOpt, Edge, IllFormed, Indices, Merge, Return, Wildcard};
+use core::{fmt, num::NonZeroUsize};
 
 /// A state in a visibly pushdown automaton.
 #[allow(clippy::exhaustive_structs, clippy::type_complexity)]
 #[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct State<A: 'static + fmt::Debug + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> {
+pub struct State<
+    A: 'static + fmt::Debug + Ord,
+    S: 'static + fmt::Debug + Copy + Ord,
+    Ctrl: fmt::Debug + Indices<A, S>,
+> {
     /// State transitions.
-    pub transitions: CurryOpt<S, Curry<A, Return<Edge<A, S, Ctrl>>>>,
+    pub transitions: CurryOpt<S, Wildcard<A, Return<Edge<A, S, Ctrl>>>>,
     /// Whether an automaton in this state should accept when input ends.
     pub accepting: bool,
 }
 
-impl<A: fmt::Debug + Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Default for State<A, S, Ctrl> {
+impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S>> Default
+    for State<A, S, Ctrl>
+{
     #[inline]
     #[allow(clippy::default_trait_access)]
     fn default() -> Self {
@@ -46,11 +49,11 @@ impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices
     }
 }
 
-impl<A: fmt::Debug + Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
+impl<A: fmt::Debug + Clone + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
     for State<A, S, Ctrl>
 {
     #[inline]
-    fn merge(self, other: &Self) -> Result<Self, crate::IllFormed<A, S, Ctrl>> {
+    fn merge(self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
         Ok(Self {
             transitions: self.transitions.merge(&other.transitions)?,
             accepting: self.accepting || other.accepting,
@@ -58,11 +61,20 @@ impl<A: fmt::Debug + Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S
     }
 }
 
-impl<A: fmt::Debug + Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S>> State<A, S, Ctrl> {
+impl<A: fmt::Debug + Clone + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S>>
+    State<A, S, Ctrl>
+{
+    /// Check for structural errors.
+    /// # Errors
+    /// If this automaton is not well-formed.
+    #[inline]
+    pub fn check(&self, size: NonZeroUsize) -> Result<(), IllFormed<A, S, Ctrl>> {
+        self.transitions.check(size)
+    }
+
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
-    #[cfg(any(test, feature = "quickcheck"))]
-    pub(crate) fn deabsurdify(&mut self, size: NonZeroUsize) {
+    pub fn deabsurdify(&mut self, size: NonZeroUsize) {
         self.transitions.deabsurdify(size);
     }
 }

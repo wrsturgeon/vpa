@@ -6,11 +6,11 @@
 
 //! Execution of a visibly pushdown automaton on an input sequence.
 
-use crate::{Curry, Edge, Indices, Range, Return};
+use crate::{Edge, Indices, Range, Return, Wildcard};
 use core::{fmt, mem::replace};
 
 /// Any executable automaton.
-pub trait Execute<A: Ord, S: Copy + Ord> {
+pub trait Execute<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord> {
     /// Record of control flow (usually a state or a set of states).
     type Ctrl: Indices<A, S>;
     /// Initial control flow.
@@ -29,24 +29,31 @@ pub trait Execute<A: Ord, S: Copy + Ord> {
 }
 
 /// Ran an automaton that tried to take a nonsensical action.
-/// TODO: Add fields to describe what went wrong.
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum IllFormed<A: 'static + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> {
+pub enum IllFormed<
+    A: 'static + fmt::Debug + Ord,
+    S: 'static + fmt::Debug + Copy + Ord,
+    Ctrl: Indices<A, S>,
+> {
+    /// Index larger than the number of states.
+    OutOfBounds,
     /// Two different `usize`s trying to merge into a single `usize`.
     IndexMergeConflict(usize, usize),
     /// Same key mapped to different outputs in two `BTreeMap`s being merged.
+    VecMergeConflict(Range<A>),
+    /// Same key mapped to different outputs in two `BTreeMap`s being merged.
     MapMergeConflict(
         S,
-        Curry<A, Return<Edge<A, S, Ctrl>>>,
-        Curry<A, Return<Edge<A, S, Ctrl>>>,
+        Wildcard<A, Return<Edge<A, S, Ctrl>>>,
+        Wildcard<A, Return<Edge<A, S, Ctrl>>>,
     ),
-    /// Merging two incompatible edges.
+    /// Merging two edges of different kinds (e.g. one pushes and one pops).
     EdgeMergeConflict(Edge<A, S, Ctrl>, Edge<A, S, Ctrl>),
     /// Merging two curries into one in which a specific value is overwritten by a wildcard with a different output.
     CurryOptMergeConflict(Option<S>, Option<Range<A>>),
-    /// Merging two curries into one in which a specific value is overwritten by a wildcard with a different output.
-    CurryMergeConflict(Edge<A, S, Ctrl>, Edge<A, S, Ctrl>),
+    /// Merging two wildcards into one in which a specific value is overwritten by a wildcard with a different output.
+    WildcardMergeConflict(Vec<Range<A>>),
     /// Merging two incompatible calls.
     CallMergeConflict(String, String),
     /// Merging two incompatible stack symbols.

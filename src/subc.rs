@@ -7,12 +7,12 @@
 //! Subset construction algorithm for determinizing nondeterministic automata.
 
 use crate::{
-    merge, Curry, CurryOpt, Deterministic, Edge, IllFormed, Nondeterministic, Return, State,
+    merge, CurryOpt, Deterministic, Edge, IllFormed, Nondeterministic, Return, State, Wildcard,
 };
 use core::{borrow::Borrow, fmt, iter::once};
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
-impl<A: fmt::Debug + Ord, S: Copy + Ord> Deterministic<A, S> {
+impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord> Deterministic<A, S> {
     /// Generalize a deterministic automaton to an identical but nominally nondeterministic automaton.
     #[inline]
     #[must_use]
@@ -34,38 +34,40 @@ impl<A: fmt::Debug + Ord, S: Copy + Ord> Deterministic<A, S> {
 /// Generalize a deterministic automaton to an identical but nominally nondeterministic automaton.
 #[inline]
 #[allow(clippy::type_complexity)]
-fn generalize_curry_opt<A: 'static + fmt::Debug + Ord, S: 'static + Copy + Ord>(
-    d: CurryOpt<S, Curry<A, Return<Edge<A, S, usize>>>>,
-) -> CurryOpt<S, Curry<A, Return<Edge<A, S, BTreeSet<usize>>>>> {
+fn generalize_curry_opt<A: 'static + fmt::Debug + Ord, S: 'static + fmt::Debug + Copy + Ord>(
+    d: CurryOpt<S, Wildcard<A, Return<Edge<A, S, usize>>>>,
+) -> CurryOpt<S, Wildcard<A, Return<Edge<A, S, BTreeSet<usize>>>>> {
     CurryOpt {
-        wildcard: d.wildcard.map(generalize_curry),
-        none: d.none.map(generalize_curry),
+        wildcard: d.wildcard.map(generalize_wildcard),
+        none: d.none.map(generalize_wildcard),
         some: d
             .some
             .into_iter()
-            .map(|(arg, etc)| (arg, generalize_curry(etc)))
+            .map(|(arg, etc)| (arg, generalize_wildcard(etc)))
             .collect(),
     }
 }
 
 /// Generalize a deterministic automaton to an identical but nominally nondeterministic automaton.
 #[inline]
-fn generalize_curry<A: 'static + Ord, S: 'static + Copy + Ord>(
-    d: Curry<A, Return<Edge<A, S, usize>>>,
-) -> Curry<A, Return<Edge<A, S, BTreeSet<usize>>>> {
-    Curry {
-        wildcard: d.wildcard.map(|Return(x)| Return(generalize_edge(x))),
-        specific: d
-            .specific
-            .into_iter()
-            .map(|(token, Return(x))| (token, Return(generalize_edge(x))))
-            .collect(),
+fn generalize_wildcard<A: 'static + fmt::Debug + Ord, S: 'static + fmt::Debug + Copy + Ord>(
+    d: Wildcard<A, Return<Edge<A, S, usize>>>,
+) -> Wildcard<A, Return<Edge<A, S, BTreeSet<usize>>>> {
+    match d {
+        Wildcard::Any(Return(edge)) => Wildcard::Any(Return(generalize_edge(edge))),
+        Wildcard::Specific(v) => Wildcard::Specific(
+            v.into_iter()
+                .map(|(k, Return(edge))| (k, Return(generalize_edge(edge))))
+                .collect(),
+        ),
     }
 }
 
 /// Generalize a deterministic automaton to an identical but nominally nondeterministic automaton.
 #[inline]
-fn generalize_edge<A: Ord, S: Copy + Ord>(d: Edge<A, S, usize>) -> Edge<A, S, BTreeSet<usize>> {
+fn generalize_edge<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord>(
+    d: Edge<A, S, usize>,
+) -> Edge<A, S, BTreeSet<usize>> {
     match d {
         Edge::Call { dst, call, push } => Edge::Call {
             dst: once(dst).collect(),
@@ -84,45 +86,43 @@ fn generalize_edge<A: Ord, S: Copy + Ord>(d: Edge<A, S, usize>) -> Edge<A, S, BT
     }
 }
 
-/// Determinize a deterministic automaton to an identical but nominally nondeterministic automaton.
+/// Use an ordering on subsets to translate each subset into a specific state.
 #[inline]
 #[allow(clippy::type_complexity)]
-fn determinize_curry_opt<A: 'static + fmt::Debug + Ord, S: 'static + Copy + Ord>(
-    nd: CurryOpt<S, Curry<A, Return<Edge<A, S, BTreeSet<usize>>>>>,
+fn fix_indices_curry_opt<A: 'static + fmt::Debug + Ord, S: 'static + fmt::Debug + Copy + Ord>(
+    nd: CurryOpt<S, Wildcard<A, Return<Edge<A, S, BTreeSet<usize>>>>>,
     ordering: &[BTreeSet<usize>],
-) -> CurryOpt<S, Curry<A, Return<Edge<A, S, usize>>>> {
+) -> CurryOpt<S, Wildcard<A, Return<Edge<A, S, usize>>>> {
     CurryOpt {
-        wildcard: nd.wildcard.map(|wild| determinize_curry(wild, ordering)),
-        none: nd.none.map(|none| determinize_curry(none, ordering)),
+        wildcard: nd.wildcard.map(|wild| fix_indices_wildcard(wild, ordering)),
+        none: nd.none.map(|none| fix_indices_wildcard(none, ordering)),
         some: nd
             .some
             .into_iter()
-            .map(|(arg, etc)| (arg, determinize_curry(etc, ordering)))
+            .map(|(arg, etc)| (arg, fix_indices_wildcard(etc, ordering)))
             .collect(),
     }
 }
 
-/// Determinize a deterministic automaton to an identical but nominally nondeterministic automaton.
+/// Use an ordering on subsets to translate each subset into a specific state.
 #[inline]
-fn determinize_curry<A: 'static + Ord, S: 'static + Copy + Ord>(
-    nd: Curry<A, Return<Edge<A, S, BTreeSet<usize>>>>,
+fn fix_indices_wildcard<A: 'static + fmt::Debug + Ord, S: 'static + fmt::Debug + Copy + Ord>(
+    nd: Wildcard<A, Return<Edge<A, S, BTreeSet<usize>>>>,
     ordering: &[BTreeSet<usize>],
-) -> Curry<A, Return<Edge<A, S, usize>>> {
-    Curry {
-        wildcard: nd
-            .wildcard
-            .map(|Return(x)| Return(determinize_edge(x, ordering))),
-        specific: nd
-            .specific
-            .into_iter()
-            .map(|(token, Return(x))| (token, Return(determinize_edge(x, ordering))))
-            .collect(),
+) -> Wildcard<A, Return<Edge<A, S, usize>>> {
+    match nd {
+        Wildcard::Any(Return(edge)) => Wildcard::Any(Return(fix_indices_edge(edge, ordering))),
+        Wildcard::Specific(v) => Wildcard::Specific(
+            v.into_iter()
+                .map(|(k, Return(edge))| (k, Return(fix_indices_edge(edge, ordering))))
+                .collect(),
+        ),
     }
 }
 
-/// Determinize a deterministic automaton to an identical but nominally nondeterministic automaton.
+/// Use an ordering on subsets to translate each subset into a specific state.
 #[inline]
-fn determinize_edge<A: Ord, S: Copy + Ord>(
+fn fix_indices_edge<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord>(
     nd: Edge<A, S, BTreeSet<usize>>,
     ordering: &[BTreeSet<usize>],
 ) -> Edge<A, S, usize> {
@@ -144,7 +144,7 @@ fn determinize_edge<A: Ord, S: Copy + Ord>(
     }
 }
 
-impl<A: fmt::Debug + Ord, S: Copy + Ord> Nondeterministic<A, S> {
+impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord> Nondeterministic<A, S> {
     /// Turn an iterator over indices into an iterator over references to states.
     #[inline]
     fn get_states<I: IntoIterator>(
@@ -156,16 +156,18 @@ impl<A: fmt::Debug + Ord, S: Copy + Ord> Nondeterministic<A, S> {
     {
         i.into_iter().map(|j| get!(self.states, *j.borrow()))
     }
+}
 
+impl<A: fmt::Debug + Clone + Ord, S: fmt::Debug + Copy + Ord> Nondeterministic<A, S> {
     /// Subset construction algorithm for determinizing nondeterministic automata.
     /// # Errors
     /// If there's an ambiguity (which would have crashed the nondeterministic automaton anyway).
     #[inline]
     #[allow(clippy::missing_panics_doc, clippy::unwrap_in_result)]
-    pub fn determinize(&self) -> Result<Deterministic<A, S>, IllFormed<A, S, BTreeSet<usize>>>
-    where
-        A: Clone,
-    {
+    pub fn determinize(&self) -> Result<Deterministic<A, S>, IllFormed<A, S, BTreeSet<usize>>> {
+        // Check that the source graph is well-formed
+        self.check()?;
+
         // Associate each subset of states with a merged state
         let mut subsets_as_states: BTreeMap<BTreeSet<usize>, State<A, S, BTreeSet<usize>>> =
             BTreeMap::new();
@@ -186,7 +188,7 @@ impl<A: fmt::Debug + Ord, S: Copy + Ord> Nondeterministic<A, S> {
                         accepting,
                     } = unwrap!(subsets_as_states.remove(set));
                     State {
-                        transitions: determinize_curry_opt(transitions, &ordering),
+                        transitions: fix_indices_curry_opt(transitions, &ordering),
                         accepting,
                     }
                 })
@@ -199,35 +201,44 @@ impl<A: fmt::Debug + Ord, S: Copy + Ord> Nondeterministic<A, S> {
         &self,
         subsets_as_states: &mut BTreeMap<BTreeSet<usize>, State<A, S, BTreeSet<usize>>>,
         subset: BTreeSet<usize>,
-    ) -> Result<(), IllFormed<A, S, BTreeSet<usize>>>
-    where
-        A: Clone,
-    {
-        // Merge all states into one (here's most of the heavy lifting)
-        let mega_state: State<_, _, _> = match merge(self.get_states(subset.clone())) {
-            None => {
-                drop(subsets_as_states.insert(BTreeSet::new(), State::default()));
-                return Ok(());
-            }
-            Some(r) => match r {
-                Ok(state) => state,
-                Err(e) => return Err(e),
-            },
+    ) -> Result<(), IllFormed<A, S, BTreeSet<usize>>> {
+        // Check if we've seen this subset already
+        let Entry::Vacant(entry) = subsets_as_states.entry(subset.clone()) else {
+            return Ok(());
         };
 
-        // Check if we've seen this subset already
-        let Entry::Vacant(entry) = subsets_as_states.entry(subset) else {
-            // TODO: check for inconsistencies
-            return Ok(());
+        #[allow(clippy::print_stdout, clippy::use_debug)]
+        {
+            println!("Merging {subset:?}");
+        }
+
+        // Merge this subset of states into one (most of the heavy lifting)
+        let mega_state: State<A, S, BTreeSet<usize>> = match merge(self.get_states(subset)) {
+            // If there were no states in the subset, reject immediately without a transition
+            None => State {
+                transitions: CurryOpt {
+                    wildcard: Some(Wildcard::Any(Return(Edge::Local {
+                        dst: BTreeSet::new(),
+                        call: call!(|x| x),
+                    }))),
+                    none: None,
+                    some: BTreeMap::new(),
+                },
+                accepting: false,
+            },
+            // If they successfully merged, return the merged state
+            Some(Ok(ok)) => ok,
+            // If they didn't successfully merge, something's wrong with the original automaton
+            Some(Err(e)) => return Err(e),
         };
 
         // Cache all possible next states
         #[allow(clippy::needless_collect)] // <-- false positive: can't move `mega_state` below
-        let dsts: Vec<BTreeSet<usize>> = mega_state
+        let dsts: BTreeSet<BTreeSet<usize>> = mega_state
             .transitions
             .values()
-            .flat_map(Curry::values)
-            .map(|&Return(ref edge)| edge.dst().clone())
+            .flat_map(Wildcard::values)
+            .map(|edge| edge.dst().clone())
             .collect();
 
         // Associate this subset of states with the merged state

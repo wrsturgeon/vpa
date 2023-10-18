@@ -11,15 +11,12 @@
 //! I don't want to impose a `Clone` bound on a type that never actually needs to be cloned
 //! just because an interpreter would be easier to write if it were `Clone`.
 
-use crate::{Curry, Edge, IllFormed, Indices, Lookup, Merge, Return};
-use core::{fmt, iter::*, option};
+use crate::{Edge, IllFormed, Indices, Lookup, Merge, Return, Wildcard};
+use core::{fmt, iter::*, num::NonZeroUsize, option};
 use std::collections::{
     btree_map::{IntoIter, Iter},
     BTreeMap,
 };
-
-#[cfg(any(test, feature = "quickcheck"))]
-use core::num::NonZeroUsize;
 
 /// Map from an optional top-of-stack symbol (optional b/c it might be empty) to _another map_ that matches input tokens.
 /// # Why is this necessary?
@@ -49,7 +46,7 @@ impl<Arg: Ord, Etc: Lookup> Default for CurryOpt<Arg, Etc> {
     }
 }
 
-impl<Arg: fmt::Debug + Ord, Etc: fmt::Debug + Lookup> fmt::Debug for CurryOpt<Arg, Etc> {
+impl<Arg: fmt::Debug + Ord, Etc: Lookup> fmt::Debug for CurryOpt<Arg, Etc> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -99,39 +96,34 @@ where
     }
 }
 
-impl<A: 'static + fmt::Debug + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>>
-    Merge<A, S, Ctrl> for CurryOpt<S, Curry<A, Return<Edge<A, S, Ctrl>>>>
+impl<
+        A: 'static + fmt::Debug + Clone + Ord,
+        S: 'static + fmt::Debug + Copy + Ord,
+        Ctrl: Indices<A, S>,
+    > Merge<A, S, Ctrl> for CurryOpt<S, Wildcard<A, Return<Edge<A, S, Ctrl>>>>
 {
     #[inline]
     fn merge(self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
         let wildcard = self.wildcard.merge(&other.wildcard)?;
         let none = self.none.merge(&other.none)?;
         let some = self.some.merge(&other.some)?;
-        if let Some(wild) = wildcard {
-            for curry in &none {
+        if let Some(ref wild) = wildcard {
+            if let Some(ref curry) = none {
                 if let Some(overlap) = wild.disjoint(curry) {
-                    // TODO: Doesn't need to reject this generally! Only if there's actually a conflict
                     return Err(IllFormed::CurryOptMergeConflict(None, overlap));
                 }
             }
             for (arg, curry) in &some {
                 if let Some(overlap) = wild.disjoint(curry) {
-                    // TODO: Doesn't need to reject this generally! Only if there's actually a conflict
                     return Err(IllFormed::CurryOptMergeConflict(Some(*arg), overlap));
                 }
             }
-            Ok(Self {
-                wildcard: Some(wild),
-                none,
-                some,
-            })
-        } else {
-            Ok(Self {
-                wildcard,
-                none,
-                some,
-            })
         }
+        Ok(Self {
+            wildcard,
+            none,
+            some,
+        })
     }
 }
 
@@ -218,19 +210,47 @@ impl<Arg: Ord, Etc: Lookup> CurryOpt<Arg, Etc> {
     }
 }
 
-impl<A: 'static + fmt::Debug + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>>
-    CurryOpt<S, Curry<A, Return<Edge<A, S, Ctrl>>>>
+impl<
+        A: 'static + fmt::Debug + Clone + Ord,
+        S: 'static + fmt::Debug + Copy + Ord,
+        Ctrl: Indices<A, S>,
+    > CurryOpt<S, Wildcard<A, Return<Edge<A, S, Ctrl>>>>
 {
+    /// Check for structural errors.
+    /// # Errors
+    /// If this automaton is not well-formed.
+    #[inline]
+    pub fn check(&self, size: NonZeroUsize) -> Result<(), IllFormed<A, S, Ctrl>> {
+        if let Some(overlap) = self
+            .wildcard
+            .as_ref()
+            .and_then(|wc| self.none.as_ref().and_then(|none| wc.disjoint(none)))
+        {
+            return Err(IllFormed::CurryOptMergeConflict(None, overlap));
+        }
+        if let Some((key, overlap)) = self.wildcard.as_ref().and_then(|wc| {
+            self.some.iter().fold(None, |acc, (k, v)| {
+                acc.or_else(|| wc.disjoint(v).map(|x| (k, x)))
+            })
+        }) {
+            return Err(IllFormed::CurryOptMergeConflict(Some(*key), overlap));
+        }
+        self.wildcard.as_ref().map_or(Ok(()), |wc| wc.check(size))?;
+        self.none.as_ref().map_or(Ok(()), |none| none.check(size))?;
+        self.some.iter().try_fold((), |(), (_, x)| x.check(size))
+    }
+
     /// Eliminate absurd relations like transitions to non-existing states.
+    /// # Panics
+    /// TODO
     #[inline]
     #[allow(clippy::never_loop)]
-    #[cfg(any(test, feature = "quickcheck"))]
-    pub(crate) fn deabsurdify(&mut self, size: NonZeroUsize) {
+    pub fn deabsurdify(&mut self, size: NonZeroUsize) {
         if let Some(ref mut none) = self.none {
-            none.deabsurdify(size);
+            none.deabsurdify(Some(size));
         }
         if let Some(ref mut wild) = self.wildcard {
-            wild.deabsurdify(size);
+            wild.deabsurdify(Some(size));
             'dont_delete_none: loop {
                 'delete_none: loop {
                     if let Some(ref mut none) = self.none {
@@ -248,7 +268,7 @@ impl<A: 'static + fmt::Debug + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indic
             }
         }
         for etc in self.some.values_mut() {
-            etc.deabsurdify(size);
+            etc.deabsurdify(Some(size));
             while let Some(overlap) = self
                 .wildcard
                 .as_ref()

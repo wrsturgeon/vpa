@@ -3,7 +3,7 @@ mod test;
 
 use core::iter::once;
 use rand::{thread_rng, RngCore};
-use vpa::{call, Automaton, Curry, CurryOpt, Deterministic, Edge, Range, Return, Run, State};
+use vpa::{call, Automaton, CurryOpt, Deterministic, Edge, Range, Return, Run, State, Wildcard};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Symbol {
@@ -15,32 +15,24 @@ fn parser() -> Deterministic<char, Symbol> {
     Automaton {
         states: vec![State {
             transitions: CurryOpt {
-                wildcard: Some(Curry {
-                    wildcard: None,
-                    specific: once((
-                        Range::unit('('),
-                        Return(Edge::Call {
-                            call: call!(|x| x),
-                            dst: 0,
-                            push: Symbol::Paren,
-                        }),
-                    ))
-                    .collect(),
-                }),
+                wildcard: Some(Wildcard::Specific(vec![(
+                    Range::unit('('),
+                    Return(Edge::Call {
+                        call: call!(|x| x),
+                        dst: 0,
+                        push: Symbol::Paren,
+                    }),
+                )])),
                 none: None,
                 some: once((
                     Symbol::Paren,
-                    Curry {
-                        wildcard: None,
-                        specific: once((
-                            Range::unit(')'),
-                            Return(Edge::Return {
-                                call: call!(|x| x),
-                                dst: 0,
-                            }),
-                        ))
-                        .collect(),
-                    },
+                    Wildcard::Specific(vec![(
+                        Range::unit(')'),
+                        Return(Edge::Return {
+                            call: call!(|x| x),
+                            dst: 0,
+                        }),
+                    )]),
                 ))
                 .collect(),
             },

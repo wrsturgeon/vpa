@@ -7,15 +7,12 @@
 //! Edge in a visibly pushdown automaton (everything except the source state and the token that triggers it).
 
 use crate::{Call, IllFormed, Indices, Merge};
-use core::{convert::Infallible, fmt, marker::PhantomData};
-
-#[cfg(any(test, feature = "quickcheck"))]
-use core::num::NonZeroUsize;
+use core::{convert::Infallible, fmt, marker::PhantomData, num::NonZeroUsize};
 
 /// Edge in a visibly pushdown automaton (everything except the source state and the token that triggers it).
 #[allow(clippy::exhaustive_enums)]
 #[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum Edge<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>> {
+pub enum Edge<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S>> {
     /// Transition that causes a stack push.
     Call {
         /// Index of the machine's state after this transition.
@@ -43,7 +40,7 @@ pub enum Edge<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>> {
     Phantom(Infallible, PhantomData<A>),
 }
 
-impl<A: Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices<A, S>> fmt::Debug
+impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices<A, S>> fmt::Debug
     for Edge<A, S, Ctrl>
 {
     #[inline]
@@ -77,7 +74,9 @@ impl<A: Ord, S: fmt::Debug + Copy + Ord, Ctrl: fmt::Debug + Indices<A, S>> fmt::
     }
 }
 
-impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl> for Edge<A, S, Ctrl> {
+impl<A: fmt::Debug + Clone + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
+    for Edge<A, S, Ctrl>
+{
     #[inline]
     fn merge(self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
         match (self, other) {
@@ -132,7 +131,7 @@ impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl> for E
     }
 }
 
-impl<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Edge<A, S, Ctrl> {
+impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S>> Edge<A, S, Ctrl> {
     /// Index of the machine's state after this transition.
     #[inline]
     pub const fn dst(&self) -> &Ctrl {
@@ -174,11 +173,22 @@ impl<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Edge<A, S, Ctrl> {
         }
     }
 
+    /// Check for structural errors.
+    /// # Errors
+    /// If this automaton is not well-formed.
+    #[inline]
+    pub fn check(&self, size: NonZeroUsize) -> Result<(), IllFormed<A, S, Ctrl>> {
+        if self.dst().iter().all(|&i| i < size.into()) {
+            Ok(())
+        } else {
+            Err(IllFormed::OutOfBounds)
+        }
+    }
+
     /// Eliminate absurd relations like transitions to non-existing states.
     #[inline]
-    #[cfg(any(test, feature = "quickcheck"))]
     #[allow(clippy::arithmetic_side_effects)]
-    pub(crate) fn deabsurdify(&mut self, size: NonZeroUsize) {
+    pub fn deabsurdify(&mut self, size: NonZeroUsize) {
         self.dst_mut().map(|i| *i = *i % size);
     }
 }

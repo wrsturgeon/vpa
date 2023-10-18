@@ -171,8 +171,6 @@ macro_rules! call {
 
 mod automaton;
 mod call;
-pub mod combinators;
-mod curry;
 mod curry_opt;
 mod edge;
 mod exec;
@@ -183,6 +181,7 @@ mod range;
 mod run;
 mod state;
 mod subc;
+mod wildcard;
 
 #[cfg(feature = "quickcheck")]
 mod quickcheck_impl;
@@ -193,7 +192,6 @@ mod test;
 pub use {
     automaton::{Automaton, Deterministic, Nondeterministic},
     call::Call,
-    curry::Curry,
     curry_opt::CurryOpt,
     edge::Edge,
     exec::{Execute, Execution, IllFormed},
@@ -203,6 +201,7 @@ pub use {
     range::Range,
     run::Run,
     state::State,
+    wildcard::Wildcard,
 };
 
 #[cfg(all(test, not(feature = "quickcheck")))]

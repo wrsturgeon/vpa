@@ -58,15 +58,3 @@ impl<T: Clone + Ord> Range<T> {
         }
     }
 }
-
-/// Check if all ranges in a list are disjoint.
-#[inline]
-#[allow(dead_code)] // <-- TODO: Use somewhere!!!
-#[allow(unused_unsafe)] // <-- false positive: nested macros that each use `unsafe`
-fn disjoint<T: Ord>(array: &[Range<T>]) -> bool {
-    array.iter().enumerate().all(|(i, a)| {
-        get!(array, unwrap!(i.checked_add(1))..)
-            .iter()
-            .all(|b| !a.overlap(b))
-    })
-}

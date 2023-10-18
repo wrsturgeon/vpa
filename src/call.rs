@@ -49,7 +49,9 @@ impl<I, O> fmt::Debug for Call<I, O> {
     }
 }
 
-impl<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>, I, O> Merge<A, S, Ctrl> for Call<I, O> {
+impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S>, I, O> Merge<A, S, Ctrl>
+    for Call<I, O>
+{
     #[inline]
     fn merge(self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
         if self == *other {

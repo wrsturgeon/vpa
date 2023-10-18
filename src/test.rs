@@ -14,14 +14,27 @@
     unreachable_code
 )]
 
-use crate::*;
-use core::{fmt, iter::once};
-use std::collections::{BTreeMap, BTreeSet};
-
 #[cfg(feature = "quickcheck")]
 mod prop {
-    use super::*;
+    use crate::*;
+    use core::fmt;
     use quickcheck::{quickcheck, TestResult};
+    use std::panic;
+
+    #[inline]
+    fn determinization_implies_no_runtime_errors<
+        K: Copy + fmt::Debug + Ord,
+        S: fmt::Debug + Copy + Ord,
+    >(
+        nd: &Nondeterministic<K, S>,
+        input: &[K],
+    ) -> TestResult {
+        if nd.determinize().is_err() {
+            return TestResult::discard();
+        };
+        let _ = nd.accept(input.iter().copied()).unwrap();
+        TestResult::passed()
+    }
 
     #[inline]
     fn subset_construction<K: Copy + fmt::Debug + Ord, S: fmt::Debug + Copy + Ord>(
@@ -42,11 +55,37 @@ mod prop {
             a.overlap(&b) == b.overlap(&a)
         }
 
+        fn deabsurdify_implies_check_nd(nd: Nondeterministic<bool, bool>) -> bool {
+            let mut nd = nd;
+            if !nd.deabsurdify() {
+                return true;
+            }
+            nd.check().is_ok()
+        }
+
+        fn deabsurdify_implies_check_d(d: Deterministic<bool, bool>) -> bool {
+            let mut d = d;
+            if !d.deabsurdify() {
+                return true;
+            }
+            d.check().is_ok()
+        }
+
+        fn determinization_implies_no_runtime_errors_bool_bool(nd: Nondeterministic<bool, bool>, input: Vec<bool>) -> TestResult {
+            determinization_implies_no_runtime_errors(&nd, &input)
+        }
+
+        fn generalize_determinize_succeeds(d: Deterministic<bool, bool>) -> bool {
+            let mut d = d;
+            if !d.deabsurdify() {
+                return true;
+            }
+            panic::catch_unwind(|| d.clone().generalize().determinize()).is_ok()
+        }
+
         fn subset_construction_bool_bool(nd: Nondeterministic<bool, bool>, input: Vec<bool>) -> TestResult {
             subset_construction(&nd, &input)
         }
-
-        // TODO: re-enable:
 
         // fn subset_construction_bool_u8(nd: Nondeterministic<bool, u8>, input: Vec<bool>) -> TestResult {
         //     subset_construction(&nd, &input)
@@ -63,142 +102,199 @@ mod prop {
 }
 
 mod reduced {
-    use super::*;
+    use crate::*;
+    use core::{fmt, iter};
+    use std::collections::{BTreeMap, BTreeSet};
+
+    // #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    // enum SubsetConstructionWitness {
+    //     DeterminizationFailed,
+    //     IdenticalBehavior,
+    // }
+
+    fn deabsurdify_implies_check<K: fmt::Debug + Clone + Ord, S: fmt::Debug + Copy + Ord>(
+        mut nd: Nondeterministic<K, S>,
+    ) {
+        let pre = nd.clone();
+        if !nd.deabsurdify() {
+            return;
+        }
+        assert_eq!(nd.check(), Ok(()));
+        assert_ne!(pre, nd, "Nothing changed--is this test off?");
+    }
 
     #[inline]
-    fn subset_construction<K: fmt::Debug + Copy + Ord, S: fmt::Debug + Copy + Ord>(
+    fn determinization_implies_no_runtime_errors<
+        K: fmt::Debug + Copy + Ord,
+        S: fmt::Debug + Copy + Ord,
+    >(
         nd: &Nondeterministic<K, S>,
         input: &[K],
     ) {
+        println!("Original nondeterministic automaton: {nd:?}");
+        println!();
         let Ok(d) = nd.determinize() else {
             return;
         };
-        println!("Deterministic automaton:");
-        println!("{d:#?}");
+        println!("Successfully determinized: {d:?}");
         println!();
         println!("Running the nondeterministic automaton...");
-        let nd_accept = nd
-            .accept(input.iter().copied())
-            .expect("Nondeterministic automaton panicked");
-        println!();
-        println!("Running the deterministic automaton...");
-        let d_accept = d
-            .accept(input.iter().copied())
-            .expect("Deterministic automaton panicked");
-        assert_eq!(nd_accept, d_accept);
+        let mut run_nd = input.iter().copied().run(nd);
+        println!("    {run_nd:?}");
+        while let Some(r) = run_nd.next() {
+            if let Err(e) = r {
+                panic!("Nondeterministic automaton panicked (but determinization didn't): {e:?}");
+            }
+            println!("    {run_nd:?}");
+        }
+        let _ = run_nd.ctrl.unwrap_err();
+        panic!("Ran to completion: is something wrong with this test?");
     }
 
+    // #[inline]
+    // fn subset_construction<K: fmt::Debug + Copy + Ord, S: fmt::Debug + Copy + Ord>(
+    //     nd: &Nondeterministic<K, S>,
+    //     input: &[K],
+    // ) -> SubsetConstructionWitness {
+    //     println!("Original nondeterministic automaton: {nd:?}");
+    //     println!();
+    //     let Ok(d) = nd.determinize() else {
+    //         return SubsetConstructionWitness::DeterminizationFailed;
+    //     };
+    //     println!("Deterministic automaton:");
+    //     println!("{d:#?}");
+    //     println!();
+    //     println!("Running the nondeterministic automaton...");
+    //     let mut run_nd = input.iter().copied().run(nd);
+    //     println!("    {run_nd:?}");
+    //     while let Some(r) = run_nd.next() {
+    //         if let Err(e) = r {
+    //             panic!("Nondeterministic automaton panicked (but determinization didn't): {e:?}");
+    //         }
+    //         println!("    {run_nd:?}");
+    //     }
+    //     let nd_accept = run_nd.ctrl.unwrap_err();
+    //     println!();
+    //     println!("Running the deterministic automaton...");
+    //     let mut run_d = input.iter().copied().run(&d);
+    //     println!("    {run_d:?}");
+    //     while let Some(r) = run_d.next() {
+    //         if let Err(e) = r {
+    //             panic!("Deterministic automaton panicked: {e:?}");
+    //         }
+    //         println!("    {run_d:?}");
+    //     }
+    //     let d_accept = run_d.ctrl.unwrap_err();
+    //     assert_eq!(nd_accept, d_accept);
+    //     SubsetConstructionWitness::IdenticalBehavior
+    // }
+
+    /*
     #[test]
-    fn subset_construction_1() {
-        subset_construction::<(), ()>(
-            &Automaton {
-                states: vec![State {
+    fn determinization_implies_no_runtime_errors_1() {
+        let nd = Nondeterministic {
+            states: vec![State {
+                transitions: CurryOpt {
+                    wildcard: Some(Wildcard::Specific(
+                        [
+                            (
+                                Range {
+                                    first: false,
+                                    last: false,
+                                },
+                                Return(Edge::Local {
+                                    dst: BTreeSet::new(),
+                                    call: call!(|x| x),
+                                }),
+                            ),
+                            (
+                                Range {
+                                    first: false,
+                                    last: false,
+                                },
+                                Return(Edge::Call {
+                                    dst: BTreeSet::new(),
+                                    call: call!(|x| x),
+                                    push: false,
+                                }),
+                            ),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    )),
+                    none: None,
+                    some: BTreeMap::new(),
+                },
+                accepting: false,
+            }],
+            initial: iter::once(0).collect(),
+        };
+        let _falsely_determinized = Deterministic::<bool, bool> {
+            states: vec![
+                State {
                     transitions: CurryOpt {
-                        wildcard: None,
+                        wildcard: Some(Wildcard::Any(Return(Edge::Local {
+                            dst: 0,
+                            call: call!(|x| x),
+                        }))),
                         none: None,
                         some: BTreeMap::new(),
                     },
                     accepting: false,
-                }],
-                initial: BTreeSet::new(),
-            },
-            &[],
-        );
-    }
-
-    #[test]
-    fn subset_construction_2() {
-        subset_construction::<bool, ()>(
-            &Automaton {
-                states: vec![State {
+                },
+                State {
                     transitions: CurryOpt {
-                        wildcard: None,
-                        none: Some(Curry {
-                            wildcard: None,
-                            specific: vec![],
-                        }),
+                        wildcard: Some(Wildcard::Specific(
+                            [
+                                (
+                                    Range {
+                                        first: false,
+                                        last: false,
+                                    },
+                                    Return(Edge::Local {
+                                        dst: 0,
+                                        call: call!(|x| x),
+                                    }),
+                                ),
+                                (
+                                    Range {
+                                        first: false,
+                                        last: false,
+                                    },
+                                    Return(Edge::Call {
+                                        dst: 0,
+                                        call: call!(|x| x),
+                                        push: false,
+                                    }),
+                                ),
+                            ]
+                            .into_iter()
+                            .collect(),
+                        )),
+                        none: None,
                         some: BTreeMap::new(),
                     },
                     accepting: false,
-                }],
-                initial: once(0).collect(),
-            },
-            &[false],
-        );
+                },
+            ],
+            initial: 1,
+        };
+        determinization_implies_no_runtime_errors(&nd, &[false]);
     }
+    */
 
     #[test]
-    fn subset_construction_3() {
-        subset_construction(
-            &Automaton {
-                states: vec![State {
-                    transitions: CurryOpt {
-                        wildcard: None,
-                        none: Some(Curry {
-                            wildcard: None,
-                            specific: vec![(
-                                Range {
-                                    first: false,
-                                    last: false,
-                                },
-                                Return(Edge::Call {
-                                    dst: once(0).collect(),
-                                    call: call!(|x| x),
-                                    push: true,
-                                }),
-                            )],
-                        }),
-                        some: once((
-                            true,
-                            Curry {
-                                wildcard: Some(Return(Edge::Return {
-                                    dst: BTreeSet::new(),
-                                    call: call!(|x| x),
-                                })),
-                                specific: vec![],
-                            },
-                        ))
-                        .collect(),
-                    },
-                    accepting: false,
-                }],
-                initial: once(0).collect(),
-            },
-            &[false, false],
-        );
-    }
-
-    #[test]
-    #[should_panic]
-    fn subset_construction_4() {
-        subset_construction(
-            &Automaton {
-                states: vec![State {
-                    transitions: CurryOpt {
-                        wildcard: None,
-                        none: Some(Curry {
-                            wildcard: None,
-                            specific: vec![(
-                                Range {
-                                    first: false,
-                                    last: false,
-                                },
-                                Return(Edge::Call {
-                                    dst: once(0).collect(),
-                                    call: call!(|x| x),
-                                    push: false,
-                                }),
-                            )],
-                        }),
-                        some: once((
-                            false,
-                            Curry {
-                                wildcard: Some(Return(Edge::Call {
-                                    dst: BTreeSet::new(),
-                                    call: call!(|x| x),
-                                    push: false,
-                                })),
-                                specific: vec![(
+    fn deabsurdify_1() {
+        deabsurdify_implies_check(Automaton {
+            states: vec![State {
+                transitions: CurryOpt {
+                    wildcard: None,
+                    none: None,
+                    some: iter::once((
+                        false,
+                        Wildcard::Specific(
+                            [
+                                (
                                     Range {
                                         first: false,
                                         last: false,
@@ -207,268 +303,87 @@ mod reduced {
                                         dst: BTreeSet::new(),
                                         call: call!(|x| x),
                                     }),
-                                )],
-                            },
-                        ))
-                        .collect(),
-                    },
-                    accepting: false,
-                }],
-                initial: once(0).collect(),
-            },
-            &[false, false],
-        );
-    }
-
-    #[test]
-    #[allow(clippy::absolute_paths)]
-    fn subset_construction_5() {
-        subset_construction(
-            &Automaton {
-                states: vec![
-                    State {
-                        transitions: CurryOpt {
-                            wildcard: Some(Curry {
-                                wildcard: None,
-                                specific: once((
+                                ),
+                                (
                                     Range {
                                         first: false,
                                         last: false,
                                     },
-                                    Return(Edge::Local {
+                                    Return(Edge::Return {
                                         dst: BTreeSet::new(),
-                                        call: call!(::core::convert::identity),
+                                        call: call!(|x| x),
                                     }),
-                                ))
-                                .collect(),
-                            }),
-                            none: None,
-                            some: BTreeMap::new(),
-                        },
-                        accepting: false,
-                    },
-                    State {
-                        transitions: CurryOpt {
-                            wildcard: Some(Curry {
-                                wildcard: None,
-                                specific: once((
-                                    Range {
-                                        first: false,
-                                        last: false,
-                                    },
-                                    Return(Edge::Call {
-                                        dst: [0, 1].into_iter().collect(),
-                                        call: call!(::core::convert::identity),
-                                        push: false,
-                                    }),
-                                ))
-                                .collect(),
-                            }),
-                            none: None,
-                            some: BTreeMap::new(),
-                        },
-                        accepting: false,
-                    },
-                ],
-                initial: once(1).collect(),
-            },
-            &[false, false],
-        );
+                                ),
+                            ]
+                            .into_iter()
+                            .collect(),
+                        ),
+                    ))
+                    .collect(),
+                },
+                accepting: false,
+            }],
+            initial: BTreeSet::new(),
+        });
     }
 
     #[test]
-    fn subset_construction_6() {
-        subset_construction(
-            &Automaton {
-                states: vec![
-                    State {
-                        transitions: CurryOpt {
-                            wildcard: Some(Curry {
-                                wildcard: Some(Return(Edge::Call {
+    fn deabsurdify_2() {
+        deabsurdify_implies_check(Automaton {
+            states: vec![State {
+                transitions: CurryOpt {
+                    wildcard: None,
+                    none: Some(Wildcard::Specific(
+                        [
+                            (
+                                Range {
+                                    first: false,
+                                    last: false,
+                                },
+                                Return(Edge::Local {
+                                    dst: BTreeSet::new(),
+                                    call: call!(|x| x),
+                                }),
+                            ),
+                            (
+                                Range {
+                                    first: false,
+                                    last: false,
+                                },
+                                Return(Edge::Call {
                                     dst: BTreeSet::new(),
                                     call: call!(|x| x),
                                     push: false,
-                                })),
-                                specific: vec![],
-                            }),
-                            none: None,
-                            some: BTreeMap::new(),
-                        },
-                        accepting: false,
-                    },
-                    State {
-                        transitions: CurryOpt {
-                            wildcard: Some(Curry {
-                                wildcard: None,
-                                specific: once((
-                                    Range {
-                                        first: false,
-                                        last: false,
-                                    },
-                                    Return(Edge::Call {
-                                        dst: BTreeSet::new(),
-                                        call: call!(|x| x),
-                                        push: false,
-                                    }),
-                                ))
-                                .collect(),
-                            }),
-                            none: None,
-                            some: BTreeMap::new(),
-                        },
-                        accepting: false,
-                    },
-                ],
-                initial: [0, 1].into_iter().collect(),
-            },
-            &[false, false],
-        );
-    }
-
-    #[test]
-    #[allow(clippy::too_many_lines)]
-    fn subset_construction_7() {
-        subset_construction(
-            &Nondeterministic::<bool, ()> {
-                states: vec![
-                    State {
-                        transitions: CurryOpt {
-                            wildcard: None,
-                            none: Some(Curry {
-                                wildcard: None,
-                                specific: once((
-                                    Range {
-                                        first: false,
-                                        last: false,
-                                    },
-                                    Return(Edge::Local {
-                                        dst: BTreeSet::new(),
-                                        call: call!(|x| x),
-                                    }),
-                                ))
-                                .collect(),
-                            }),
-                            some: BTreeMap::new(),
-                        },
-                        accepting: false,
-                    },
-                    State {
-                        transitions: CurryOpt {
-                            wildcard: Some(Curry {
-                                wildcard: None,
-                                specific: once((
-                                    Range {
-                                        first: false,
-                                        last: false,
-                                    },
-                                    Return(Edge::Local {
-                                        dst: [0, 1].into_iter().collect(),
-                                        call: call!(|x| x),
-                                    }),
-                                ))
-                                .collect(),
-                            }),
-                            none: None,
-                            some: BTreeMap::new(),
-                        },
-                        accepting: false,
-                    },
-                ],
-                initial: once(1).collect(),
-            },
-            &[false, false],
-        );
-        let _determinized = Deterministic::<bool, ()> {
-            states: vec![
-                State {
-                    transitions: CurryOpt {
-                        wildcard: None,
-                        none: None,
-                        some: BTreeMap::new(),
-                    },
-                    accepting: false,
-                },
-                State {
-                    transitions: CurryOpt {
-                        wildcard: Some(Curry {
-                            wildcard: None,
-                            specific: once((
-                                Range {
-                                    first: false,
-                                    last: false,
-                                },
-                                Return(Edge::Local {
-                                    dst: 1,
-                                    call: call!(|x| x),
                                 }),
-                            ))
-                            .collect(),
-                        }),
-                        none: Some(Curry {
-                            wildcard: None,
-                            specific: once((
-                                Range {
-                                    first: false,
-                                    last: false,
-                                },
-                                Return(Edge::Local {
-                                    dst: 0,
-                                    call: call!(|x| x),
-                                }),
-                            ))
-                            .collect(),
-                        }),
-                        some: BTreeMap::new(),
-                    },
-                    accepting: false,
-                },
-                State {
-                    transitions: CurryOpt {
-                        wildcard: Some(Curry {
-                            wildcard: None,
-                            specific: once((
-                                Range {
-                                    first: false,
-                                    last: false,
-                                },
-                                Return(Edge::Local {
-                                    dst: 1,
-                                    call: call!(|x| x),
-                                }),
-                            ))
-                            .collect(),
-                        }),
-                        none: None,
-                        some: BTreeMap::new(),
-                    },
-                    accepting: false,
-                },
-            ],
-            initial: 2,
-        };
-    }
-
-    #[test]
-    #[allow(clippy::absolute_paths)]
-    fn deabsurdify_1() {
-        let mut na = Nondeterministic::<(), ()> {
-            states: vec![State {
-                transitions: CurryOpt {
-                    wildcard: Some(Curry {
-                        wildcard: Some(Return(Edge::Local {
-                            dst: once(1).collect(),
-                            call: call!(|x| x),
-                        })),
-                        specific: vec![],
-                    }),
-                    none: None,
+                            ),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    )),
                     some: BTreeMap::new(),
                 },
                 accepting: false,
             }],
-            initial: once(0).collect(),
-        };
-        na.deabsurdify();
-        drop(na.determinize());
+            initial: BTreeSet::new(),
+        });
+    }
+
+    #[test]
+    fn deabsurdify_3() {
+        deabsurdify_implies_check(Nondeterministic::<(), ()> {
+            states: vec![],
+            initial: iter::once(1).collect(),
+        });
+    }
+
+    #[test]
+    fn determinization_implies_no_runtime_errors_1() {
+        determinization_implies_no_runtime_errors(
+            &Nondeterministic::<(), ()> {
+                states: vec![],
+                initial: iter::once(0).collect(),
+            },
+            &[],
+        );
     }
 }

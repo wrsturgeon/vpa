@@ -6,19 +6,23 @@
 
 //! Trait to fallibly combine multiple values into one value with identical semantics.
 
-use crate::{Curry, Edge, IllFormed, Indices, Range, Return};
-use core::borrow::Borrow;
+use crate::{Edge, IllFormed, Indices, Range, Return, Wildcard};
+use core::{borrow::Borrow, fmt};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Trait to fallibly combine multiple values into one value with identical semantics.
-pub trait Merge<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>>: Sized {
+pub trait Merge<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S>>:
+    Sized
+{
     /// Fallibly combine multiple values into one value with identical semantics.
     /// # Errors
     /// Implementation-defined: if the merge as we define it can't work.
     fn merge(self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>>;
 }
 
-impl<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl> for usize {
+impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
+    for usize
+{
     #[inline]
     fn merge(self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
         if self == *other {
@@ -29,7 +33,7 @@ impl<A: Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl> for usize {
     }
 }
 
-impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Clone + Indices<A, S>> Merge<A, S, Ctrl>
+impl<A: fmt::Debug + Clone + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
     for Option<Return<Edge<A, S, Ctrl>>>
 {
     #[inline(always)]
@@ -43,8 +47,11 @@ impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Clone + Indices<A, S>> Merge<A, S, Ctr
     }
 }
 
-impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Clone + Indices<A, S>>
-    Merge<A, S, Ctrl> for Option<Curry<A, Return<Edge<A, S, Ctrl>>>>
+impl<
+        A: 'static + fmt::Debug + Clone + Ord,
+        S: 'static + fmt::Debug + Copy + Ord,
+        Ctrl: Indices<A, S>,
+    > Merge<A, S, Ctrl> for Option<Wildcard<A, Return<Edge<A, S, Ctrl>>>>
 {
     #[inline(always)]
     fn merge(self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
@@ -57,18 +64,26 @@ impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Clone + Indices<A,
     }
 }
 
-// Vec<(range::Range<A>, lookup::Return<edge::Edge<A, S, Ctrl>>)>
-impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
+impl<A: fmt::Debug + Clone + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
     for Vec<(Range<A>, Return<Edge<A, S, Ctrl>>)>
 {
     #[inline(always)]
     fn merge(mut self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
-        self.extend(other.iter().cloned());
+        for &(ref rk, Return(ref rv)) in other {
+            for &(ref lk, _) in &self {
+                if let Some(union) = lk.union(rk) {
+                    return Err(IllFormed::VecMergeConflict(union));
+                }
+            }
+            self.push((rk.clone(), Return(rv.clone())));
+        }
         Ok(self)
     }
 }
 
-impl<A: Ord, S: Copy + Ord> Merge<A, S, BTreeSet<usize>> for BTreeSet<usize> {
+impl<A: fmt::Debug + Ord, S: fmt::Debug + Copy + Ord> Merge<A, S, BTreeSet<usize>>
+    for BTreeSet<usize>
+{
     #[inline(always)]
     fn merge(mut self, other: &Self) -> Result<Self, IllFormed<A, S, BTreeSet<usize>>> {
         self.extend(other.iter().copied());
@@ -76,8 +91,11 @@ impl<A: Ord, S: Copy + Ord> Merge<A, S, BTreeSet<usize>> for BTreeSet<usize> {
     }
 }
 
-impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
-    for BTreeMap<S, Curry<A, Return<Edge<A, S, Ctrl>>>>
+impl<
+        A: 'static + fmt::Debug + Clone + Ord,
+        S: 'static + fmt::Debug + Copy + Ord,
+        Ctrl: Indices<A, S>,
+    > Merge<A, S, Ctrl> for BTreeMap<S, Wildcard<A, Return<Edge<A, S, Ctrl>>>>
 {
     #[inline(always)]
     fn merge(mut self, other: &Self) -> Result<Self, IllFormed<A, S, Ctrl>> {
@@ -93,8 +111,8 @@ impl<A: 'static + Clone + Ord, S: 'static + Copy + Ord, Ctrl: Indices<A, S>> Mer
 /// Merge an entire iterator into a value.
 #[inline]
 pub fn merge<
-    A: Ord,
-    S: Copy + Ord,
+    A: fmt::Debug + Ord,
+    S: fmt::Debug + Copy + Ord,
     Ctrl: Indices<A, S>,
     M: Clone + Merge<A, S, Ctrl>,
     I: IntoIterator,

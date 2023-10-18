@@ -13,23 +13,15 @@ use std::collections::BTreeMap;
 
 impl<
         A: fmt::Debug + Arbitrary + Ord,
-        S: Arbitrary + Copy + Ord,
+        S: fmt::Debug + Arbitrary + Copy + Ord,
         Ctrl: 'static + Arbitrary + Indices<A, S>,
     > Arbitrary for Automaton<A, S, Ctrl>
 {
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
-        loop {
-            let states = Vec::arbitrary(g);
-            if states.is_empty() {
-                continue;
-            }
-            let mut wip = Self {
-                states,
-                initial: Ctrl::arbitrary(g),
-            };
-            wip.deabsurdify();
-            return wip;
+        Self {
+            states: Vec::arbitrary(g),
+            initial: Ctrl::arbitrary(g),
         }
     }
     #[inline]
@@ -40,18 +32,14 @@ impl<
             (self.states.clone(), self.initial.clone())
                 .shrink()
                 .filter(|&(ref states, _)| !states.is_empty())
-                .map(|(states, initial)| {
-                    let mut wip = Self { states, initial };
-                    wip.deabsurdify();
-                    wip
-                }),
+                .map(|(states, initial)| Self { states, initial }),
         )
     }
 }
 
 impl<
         A: fmt::Debug + Arbitrary + Ord,
-        S: Arbitrary + Copy + Ord,
+        S: fmt::Debug + Arbitrary + Copy + Ord,
         Ctrl: 'static + Arbitrary + Indices<A, S>,
     > Arbitrary for State<A, S, Ctrl>
 {
@@ -106,31 +94,39 @@ impl<Arg: Arbitrary + Ord, Etc: Arbitrary + Lookup> Arbitrary for CurryOpt<Arg, 
     }
 }
 
-impl<Arg: Arbitrary + Ord, Etc: Arbitrary + Lookup> Arbitrary for Curry<Arg, Etc> {
+impl<
+        A: 'static + fmt::Debug + Arbitrary + Ord,
+        S: 'static + fmt::Debug + Arbitrary + Copy + Ord,
+        Ctrl: Arbitrary + Indices<A, S>,
+    > Arbitrary for Wildcard<A, Return<Edge<A, S, Ctrl>>>
+{
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
-        let wildcard: Option<_> = Arbitrary::arbitrary(g);
-        Self {
-            specific: if wildcard.is_none() {
-                Arbitrary::arbitrary(g)
-            } else {
-                vec![]
-            },
-            wildcard,
+        if bool::arbitrary(g) {
+            Self::Any(Arbitrary::arbitrary(g))
+        } else {
+            Self::Specific(Arbitrary::arbitrary(g))
         }
     }
     #[inline]
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        Box::new(
-            (self.wildcard.clone(), self.specific.clone())
-                .shrink()
-                .map(|(wildcard, specific)| Self { wildcard, specific }),
-        )
+        match *self {
+            Self::Any(ref etc) => Box::new(etc.shrink().map(Self::Any)),
+            Self::Specific(ref v) => Box::new(
+                v.first()
+                    .map(|&(_, ref x)| Self::Any(x.clone()))
+                    .into_iter()
+                    .chain(v.shrink().map(Self::Specific)),
+            ),
+        }
     }
 }
 
-impl<A: 'static + Clone + Ord, S: Arbitrary + Copy + Ord, Ctrl: Arbitrary + Indices<A, S>> Arbitrary
-    for Edge<A, S, Ctrl>
+impl<
+        A: 'static + fmt::Debug + Clone + Ord,
+        S: fmt::Debug + Arbitrary + Copy + Ord,
+        Ctrl: Arbitrary + Indices<A, S>,
+    > Arbitrary for Edge<A, S, Ctrl>
 {
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
@@ -219,7 +215,7 @@ impl<T: Arbitrary + Ord> Arbitrary for Range<T> {
     }
 }
 
-impl<T: Arbitrary> Arbitrary for Return<T> {
+impl<T: fmt::Debug + Arbitrary> Arbitrary for Return<T> {
     #[inline]
     fn arbitrary(g: &mut Gen) -> Self {
         Self(Arbitrary::arbitrary(g))

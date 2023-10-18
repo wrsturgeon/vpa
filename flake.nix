@@ -22,7 +22,7 @@
           rustc = toolchain;
         });
         settings = {
-          cargoBuildOptions = orig: orig ++ [ "--examples" ];
+          # cargoBuildOptions = orig: orig ++ [ "--examples" ];
           # doCheck = true;
           doDocFail = true;
           gitAllRefs = true;

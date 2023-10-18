@@ -7,10 +7,11 @@
 //! Trait to define fallible lookup.
 
 use crate::{Edge, Indices, Merge};
+use core::fmt;
 use std::collections::BTreeMap;
 
 /// Trait to define fallible lookup.
-pub trait Lookup {
+pub trait Lookup: fmt::Debug {
     /// Input to a lookup.
     type Key<'k>: Copy;
     /// Output of a successful lookup.
@@ -22,7 +23,7 @@ pub trait Lookup {
     fn map_values<F: FnMut(&mut Self::Value)>(&mut self, f: F);
 }
 
-impl<K: 'static + Ord, V: 'static> Lookup for BTreeMap<K, V> {
+impl<K: 'static + fmt::Debug + Ord, V: 'static + fmt::Debug> Lookup for BTreeMap<K, V> {
     type Key<'k> = &'k K;
     type Value = V;
     #[inline(always)]
@@ -40,9 +41,9 @@ impl<K: 'static + Ord, V: 'static> Lookup for BTreeMap<K, V> {
 /// Trivial lookup after currying: just return this value.
 #[allow(clippy::exhaustive_structs)]
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Return<T>(pub T);
+pub struct Return<T: fmt::Debug>(pub T);
 
-impl<T: 'static> Lookup for Return<T> {
+impl<T: 'static + fmt::Debug> Lookup for Return<T> {
     type Key<'k> = ();
     type Value = T;
     #[inline(always)]
@@ -55,7 +56,7 @@ impl<T: 'static> Lookup for Return<T> {
     }
 }
 
-impl<A: Clone + Ord, S: Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
+impl<A: fmt::Debug + Clone + Ord, S: fmt::Debug + Copy + Ord, Ctrl: Indices<A, S>> Merge<A, S, Ctrl>
     for Return<Edge<A, S, Ctrl>>
 {
     #[inline(always)]
